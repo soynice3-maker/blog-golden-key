@@ -176,21 +176,29 @@ function cleanTag(t: string) {
   return stripped.length >= 2 && !HASHTAG_STOPS.has(stripped) ? stripped : ''
 }
 
-function runAnalysis(keyword: string, cd: CrawlData): Analysis {
+function runAnalysis(keyword: string, cd: CrawlData, brandName = ''): Analysis {
   const kw = keyword.trim()
   const kwNospace = kw.replace(/\s+/g, '')
   const kwLower = kw.toLowerCase()
   const kwLowerNospace = kwNospace.toLowerCase()
+  const brandLower = brandName.trim().toLowerCase()
 
   const allTitles = cd.allTitles || []
   const posts = cd.posts || []
 
-  // 키워드가 제목에 포함된 글만 키워드 분석에 사용 (무관한 글 필터링)
+  // 키워드가 제목에 포함된 글만 필터링
   const relevantPosts = posts.filter(p =>
     p.title.toLowerCase().replace(/\s+/g, '').includes(kwLowerNospace) ||
     p.title.toLowerCase().includes(kwLower)
   )
-  const analyzePosts = relevantPosts.length >= Math.min(3, posts.length) ? relevantPosts : posts
+
+  // 브랜드명이 있으면 추가 필터링
+  const brandFiltered = brandLower
+    ? relevantPosts.filter(p => p.title.toLowerCase().includes(brandLower))
+    : relevantPosts
+
+  const analyzePosts = brandFiltered.length >= 2 ? brandFiltered :
+    relevantPosts.length >= Math.min(3, posts.length) ? relevantPosts : posts
 
   // ── 제목 위치
   let frontCount = 0, middleCount = 0, backCount = 0
@@ -489,6 +497,7 @@ export default function DashboardPage() {
   const [mode, setMode] = useState<'home' | 'write-input' | 'analyzing' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'trend-category' | 'trend-loading' | 'trend-result'>('home')
 
   const [topic, setTopic] = useState('')
+  const [brandName, setBrandName] = useState('')
   const [keywords, setKeywords] = useState<string[]>([])
   const [keywordInput, setKeywordInput] = useState('')
   const [subKeywords, setSubKeywords] = useState<string[]>([])
@@ -544,7 +553,7 @@ export default function DashboardPage() {
   }, [])
 
   const resetAll = () => {
-    setTopic(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
+    setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
     setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setAutoSelectedKeyword('')
     setError(''); setPlaceError('')
     setCopied(false); setHashtagCopied(false)
@@ -757,7 +766,7 @@ export default function DashboardPage() {
       const crawlRes = await fetch(`http://localhost:3001/analyze-top-posts?keyword=${encodeURIComponent(selectedKw)}`)
       const cd: CrawlData = await crawlRes.json()
 
-      const a = runAnalysis(selectedKw, cd)
+      const a = runAnalysis(selectedKw, cd, brandName)
       setKeywordData(best)
       setCrawlData(cd)
       setAnalysis(a)
@@ -867,6 +876,13 @@ export default function DashboardPage() {
                 <p className="text-xs text-gray-400 mt-1 pl-4">작성하고 싶은 포스팅 주제를 입력하세요</p>
               </div>
               <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">가게·브랜드명 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <input type="text" placeholder="예: 몽밀, 로라멘, 스타벅스"
+                  value={brandName} onChange={e => setBrandName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 placeholder:text-gray-300" />
+                <p className="text-xs text-gray-400 mt-1 pl-4">입력하면 해당 가게·브랜드 관련 글만 골라 분석해요</p>
+              </div>
+              <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">타겟 키워드 <span className="text-red-400">*</span></label>
                 <div className="w-full px-3 py-2 border border-gray-400 rounded-xl text-sm focus-within:border-blue-400 flex flex-wrap gap-2 min-h-[46px] cursor-text"
                   onClick={() => document.getElementById('keyword-input')?.focus()}>
@@ -961,7 +977,7 @@ export default function DashboardPage() {
         {/* ── result ── */}
         {mode === 'result' && analysis && (
           <div className="space-y-4">
-            <button onClick={() => { setTopic(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink(''); setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setMode('write-input') }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            <button onClick={() => { setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink(''); setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setMode('write-input') }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold">분석 결과</h2>
             <p className="text-gray-400 text-sm -mt-2">키워드: <span className="text-blue-500 font-medium">{keywordData?.keyword || mainKeyword}</span></p>
             {autoSelectedKeyword && (
@@ -1043,10 +1059,15 @@ export default function DashboardPage() {
                 const kw = (keywordData?.keyword || mainKeyword).trim()
                 const kwNs = kw.replace(/\s+/g, '').toLowerCase()
                 const kwL = kw.toLowerCase()
-                const filtered = crawlData.allTitles.filter(t =>
+                const brandL = brandName.trim().toLowerCase()
+                const kwFiltered = crawlData.allTitles.filter(t =>
                   t.title.toLowerCase().replace(/\s+/g, '').includes(kwNs) ||
                   t.title.toLowerCase().includes(kwL)
                 )
+                const brandFiltered = brandL
+                  ? kwFiltered.filter(t => t.title.toLowerCase().includes(brandL))
+                  : kwFiltered
+                const filtered = brandFiltered.length >= 3 ? brandFiltered : kwFiltered
                 const displayTitles = filtered.length >= 3 ? filtered : crawlData.allTitles
                 return (
                   <div>
