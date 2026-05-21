@@ -508,6 +508,8 @@ export default function DashboardPage() {
   const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null)
   const [ideasMap, setIdeasMap] = useState<Record<string, KeywordIdea[] | 'loading' | 'error'>>({})
 
+  const [autoSelectedKeyword, setAutoSelectedKeyword] = useState('')
+
   // trend state
   const [trendCategory, setTrendCategory] = useState('')
   const [trendKeywords, setTrendKeywords] = useState<{ keyword: string; ratio: number; rank: number }[]>([])
@@ -529,7 +531,7 @@ export default function DashboardPage() {
 
   const resetAll = () => {
     setTopic(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
-    setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt('')
+    setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setAutoSelectedKeyword('')
     setError(''); setPlaceError('')
     setCopied(false); setHashtagCopied(false)
     setInsightKeyword(''); setInsightData(null); setInsightError('')
@@ -657,18 +659,18 @@ export default function DashboardPage() {
 
   const addKeyword = (val: string) => {
     const trimmed = val.trim().replace(/,$/, '')
-    if (trimmed && keywords.length === 0) {
-      setKeywords([trimmed])
+    if (trimmed && keywords.length < 3 && !keywords.includes(trimmed)) {
+      setKeywords(prev => [...prev, trimmed])
     }
     setKeywordInput('')
   }
 
   const handleKeywordInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (keywords.length >= 1) return
+    if (keywords.length >= 3) return
     const val = e.target.value
     if (val.includes(',')) {
-      const first = val.split(',')[0].trim()
-      if (first) setKeywords([first])
+      const parts = val.split(',').map(p => p.trim()).filter(Boolean)
+      parts.forEach(p => { if (p && keywords.length < 3 && !keywords.includes(p)) setKeywords(prev => [...prev, p]) })
       setKeywordInput('')
     } else {
       setKeywordInput(val)
@@ -681,7 +683,7 @@ export default function DashboardPage() {
       if (keywordInput.trim()) { addKeyword(keywordInput); return }
       if (keywords.length > 0) startAnalysis()
     } else if (e.key === 'Backspace' && !keywordInput && keywords.length > 0) {
-      setKeywords([])
+      setKeywords(prev => prev.slice(0, -1))
     }
   }
 
@@ -714,33 +716,38 @@ export default function DashboardPage() {
   }
 
   const startAnalysis = async () => {
-    const kw = mainKeyword
+    const allKws = keywordInput.trim() ? [...keywords, keywordInput.trim()] : [...keywords]
     if (!topic.trim()) { setError('작성 주제를 입력해주세요'); return }
-    if (!kw) { setError('타겟 키워드를 입력해주세요'); return }
-    // 입력 중인 값도 태그로 확정
-    if (keywordInput.trim()) { addKeyword(keywordInput) }
+    if (allKws.length === 0) { setError('타겟 키워드를 입력해주세요'); return }
+    if (keywordInput.trim()) addKeyword(keywordInput)
     setMode('analyzing')
     setError('')
 
     try {
-      const [analyzeRes, crawlRes] = await Promise.all([
-        fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keywords: [kw] })
-        }),
-        fetch(`http://localhost:3001/analyze-top-posts?keyword=${encodeURIComponent(kw)}`)
-      ])
-
+      const analyzeRes = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keywords: allKws })
+      })
       const analyzeData = await analyzeRes.json()
-      const cd: CrawlData = await crawlRes.json()
-      const kd = analyzeData.inputResults?.[0] || null
 
-      const a = runAnalysis(kw, cd)
-      setKeywordData(kd)
+      // goldenScore 높은 순(=경쟁 낮은 순)으로 정렬된 결과에서 첫 번째 선택
+      const best = analyzeData.inputResults?.[0] || null
+      const selectedKw = best?.keyword || allKws[0]
+      setAutoSelectedKeyword(allKws.length > 1 ? selectedKw : '')
+
+      // 선택되지 않은 타겟 키워드 → 서브 키워드로
+      const remainingKws = allKws.filter(kw => kw !== selectedKw)
+      const allSubKws = [...remainingKws, ...subKeywords].join(', ')
+
+      const crawlRes = await fetch(`http://localhost:3001/analyze-top-posts?keyword=${encodeURIComponent(selectedKw)}`)
+      const cd: CrawlData = await crawlRes.json()
+
+      const a = runAnalysis(selectedKw, cd)
+      setKeywordData(best)
       setCrawlData(cd)
       setAnalysis(a)
-      setPrompt(buildPrompt(kw, subKeywords.join(', '), topic, notes, kd, cd, a))
+      setPrompt(buildPrompt(selectedKw, allSubKws, topic, notes, best, cd, a))
       setMode('result')
     } catch {
       setError('분석 중 오류가 발생했습니다. 크롤러 서버가 실행 중인지 확인해주세요.')
@@ -856,16 +863,16 @@ export default function DashboardPage() {
                         className="text-blue-400 hover:text-blue-600 leading-none">×</button>
                     </span>
                   ))}
-                  {keywords.length === 0 && (
+                  {keywords.length < 3 && (
                     <input id="keyword-input" type="text"
-                      placeholder="예: 문래 라멘"
+                      placeholder={keywords.length === 0 ? '예: 문래 라멘' : '키워드 추가...'}
                       value={keywordInput}
                       onChange={handleKeywordInputChange}
                       onKeyDown={handleKeywordKeyDown}
                       className="flex-1 min-w-[120px] outline-none bg-transparent py-1 placeholder:text-gray-300" />
                   )}
                 </div>
-                <p className="text-xs text-gray-400 mt-1 pl-3">가장 중요한 키워드 1개를 입력하고 Enter를 누르세요</p>
+                <p className="text-xs text-gray-400 mt-1 pl-3">키워드 최대 3개 입력 — 경쟁강도 가장 낮은 키워드가 자동으로 타겟으로 선정돼요</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">서브 키워드 <span className="text-gray-400 font-normal">(선택)</span></label>
@@ -942,7 +949,12 @@ export default function DashboardPage() {
           <div className="space-y-4">
             <button onClick={() => { setTopic(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink(''); setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setMode('write-input') }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold">분석 결과</h2>
-            <p className="text-gray-400 text-sm -mt-2">키워드: <span className="text-blue-500 font-medium">{mainKeyword}</span></p>
+            <p className="text-gray-400 text-sm -mt-2">키워드: <span className="text-blue-500 font-medium">{keywordData?.keyword || mainKeyword}</span></p>
+            {autoSelectedKeyword && (
+              <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm text-blue-700">
+                ✅ <strong>'{autoSelectedKeyword}'</strong>을 타겟 키워드로 선정했어요 (입력한 키워드 중 경쟁강도 가장 낮음)
+              </div>
+            )}
 
             {/* 키워드 통계 */}
             {keywordData && (
