@@ -368,11 +368,18 @@ function runAnalysis(keyword: string, cd: CrawlData): Analysis {
   if (relatedKeywords.length > 0)
     contentPoints.push(`연관 키워드 분산 배치: ${relatedKeywords.slice(0, 4).map(r => r.word).join(', ')}`)
 
-  // ── 해시태그 보완 (5개 미만이면 연관 키워드로 채움)
-  // 크롤 해시태그 정제 (조사 제거 + 필터)
-  let topHashtags = (cd.topHashtags || [])
-    .map(h => ({ ...h, tag: cleanTag(h.tag) }))
-    .filter(h => h.tag.length >= 2)
+  // ── 해시태그 (V2: 관련 글에서만 추출)
+  const hashtagFreq: Record<string, number> = {}
+  analyzePosts.forEach(p => {
+    (p.hashtags || []).forEach(tag => {
+      const cleaned = cleanTag(tag)
+      if (cleaned.length >= 2) hashtagFreq[cleaned] = (hashtagFreq[cleaned] || 0) + 1
+    })
+  })
+  let topHashtags = Object.entries(hashtagFreq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([tag, count]) => ({ tag, count }))
 
   // 5개 미만이면 연관 키워드로 보완
   if (topHashtags.length < 5) {
@@ -1032,19 +1039,29 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
-              {crawlData?.allTitles && crawlData.allTitles.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-500 mb-2">상위노출 제목</p>
-                  <ul className="space-y-1.5">
-                    {crawlData.allTitles.slice(0, 6).map((t, i) => (
-                      <li key={i} className="text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg flex gap-2">
-                        <span className="text-xs text-gray-400 shrink-0">[{t.blockName}]</span>
-                        <span>{t.title}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {crawlData?.allTitles && crawlData.allTitles.length > 0 && (() => {
+                const kw = (keywordData?.keyword || mainKeyword).trim()
+                const kwNs = kw.replace(/\s+/g, '').toLowerCase()
+                const kwL = kw.toLowerCase()
+                const filtered = crawlData.allTitles.filter(t =>
+                  t.title.toLowerCase().replace(/\s+/g, '').includes(kwNs) ||
+                  t.title.toLowerCase().includes(kwL)
+                )
+                const displayTitles = filtered.length >= 3 ? filtered : crawlData.allTitles
+                return (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-2">상위노출 제목</p>
+                    <ul className="space-y-1.5">
+                      {displayTitles.slice(0, 6).map((t, i) => (
+                        <li key={i} className="text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg flex gap-2">
+                          <span className="text-xs text-gray-400 shrink-0">[{t.blockName}]</span>
+                          <span>{t.title}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })()}
             </div>
 
             {/* 본문 키워드 분석 */}
