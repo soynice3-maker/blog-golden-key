@@ -1479,7 +1479,14 @@ export default function DashboardPage() {
                     <tr className="text-xs text-gray-400 border-b border-gray-100 bg-gray-50">
                       <th className="text-left px-4 py-3 font-medium">키워드</th>
                       <th className="text-center px-3 py-3 font-medium">순위</th>
-                      <th className="text-right px-3 py-3 font-medium">트렌드 지수</th>
+                      <th className="text-right px-3 py-3 font-medium">
+                        <span className="group relative cursor-help">
+                          트렌드 지수
+                          <span className="absolute bottom-full right-0 mb-1.5 w-44 bg-gray-800 text-white text-xs rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal text-center z-10">
+                            검색 인기도 (높을수록 핫함)
+                          </span>
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
