@@ -423,7 +423,7 @@ function buildPrompt(keyword: string, subKeywords: string, topic: string, notes:
     ? `\n서브 키워드: ${subKeywords.trim().split(/[,，\s]+/).filter(Boolean).join(', ')}`
     : ''
 
-  return `네이버 블로그 글을 써줘.
+  return `네이버 SEO에 최적화된 상위노출 블로그 글을 작성해줘.
 
 키워드: ${kw}${subKwLine}${topic ? `\n주제: ${topic}` : ''}
 
