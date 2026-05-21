@@ -508,11 +508,12 @@ export default function DashboardPage() {
   const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null)
   const [ideasMap, setIdeasMap] = useState<Record<string, KeywordIdea[] | 'loading' | 'error'>>({})
 
-  // trend ideas state
+  // trend state
   const [trendCategory, setTrendCategory] = useState('')
-  const [trendResults, setTrendResults] = useState<TrendIdea[]>([])
-  const [trendMeta, setTrendMeta] = useState<TrendMeta | null>(null)
+  const [trendKeywords, setTrendKeywords] = useState<{ keyword: string; ratio: number; rank: number }[]>([])
   const [trendError, setTrendError] = useState('')
+  const [trendExpandedKeyword, setTrendExpandedKeyword] = useState<string | null>(null)
+  const [trendIdeasMap, setTrendIdeasMap] = useState<Record<string, KeywordIdea[] | 'loading' | 'error'>>({})
 
   const router = useRouter()
   const supabase = createClient()
@@ -533,7 +534,7 @@ export default function DashboardPage() {
     setCopied(false); setHashtagCopied(false)
     setInsightKeyword(''); setInsightData(null); setInsightError('')
     setGoldenCategory(''); setGoldenResults([]); setGoldenHasMore(false); setGoldenOffset(0); setGoldenError(''); setExpandedKeyword(null); setIdeasMap({})
-    setTrendCategory(''); setTrendResults([]); setTrendMeta(null); setTrendError('')
+    setTrendCategory(''); setTrendKeywords([]); setTrendError(''); setTrendExpandedKeyword(null); setTrendIdeasMap({})
     setMode('home')
   }
 
@@ -616,28 +617,39 @@ export default function DashboardPage() {
 
   const startTrend = async (category: string) => {
     setTrendCategory(category)
-    setTrendResults([])
-    setTrendMeta(null)
+    setTrendKeywords([])
     setTrendError('')
+    setTrendExpandedKeyword(null)
+    setTrendIdeasMap({})
     setMode('trend-loading')
     try {
-      const res = await fetch('/api/trend-ideas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category }),
-      })
+      const res = await fetch(`/api/trend-keywords?category=${category}`)
       const data = await res.json()
-      if (!res.ok) {
-        setTrendError(data.error || '오류가 발생했습니다')
-        setMode('trend-result')
-        return
-      }
-      setTrendResults(data.ideas || [])
-      setTrendMeta(data.meta || null)
-      setMode('trend-result')
+      if (!res.ok) { setTrendError(data.error || '오류가 발생했습니다') }
+      else setTrendKeywords(data.keywords || [])
     } catch {
       setTrendError('서버에 연결할 수 없습니다.')
-      setMode('trend-result')
+    }
+    setMode('trend-result')
+  }
+
+  const toggleTrendKeyword = async (keyword: string) => {
+    if (trendExpandedKeyword === keyword) { setTrendExpandedKeyword(null); return }
+    setTrendExpandedKeyword(keyword)
+    if (trendIdeasMap[keyword]) return
+
+    setTrendIdeasMap(prev => ({ ...prev, [keyword]: 'loading' }))
+    try {
+      const res = await fetch('/api/keyword-ideas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword, category: trendCategory }),
+      })
+      const data = await res.json()
+      if (!res.ok) setTrendIdeasMap(prev => ({ ...prev, [keyword]: 'error' }))
+      else setTrendIdeasMap(prev => ({ ...prev, [keyword]: data.ideas }))
+    } catch {
+      setTrendIdeasMap(prev => ({ ...prev, [keyword]: 'error' }))
     }
   }
 
@@ -1452,63 +1464,75 @@ export default function DashboardPage() {
               </span>
             </p>
 
-            {trendError && (
+            {trendError && <p className="text-red-500 text-sm">{trendError}</p>}
+
+            {trendKeywords.length === 0 && !trendError ? (
               <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
                 <p className="text-2xl mb-3">🔄</p>
-                <p className="font-medium mb-1 text-gray-500">
-                  {trendError.includes('아직') ? '아직 데이터가 준비 중이에요' : '글감 생성에 실패했습니다'}
-                </p>
-                <p className="text-sm">{trendError}</p>
+                <p className="font-medium mb-1">아직 데이터가 준비 중이에요</p>
+                <p className="text-sm">트렌드 수집은 매일 새벽 5시에 진행돼요</p>
               </div>
-            )}
-
-            {trendMeta && (
-              <div className="bg-green-50 rounded-2xl p-4 space-y-2">
-                {trendMeta.trendKeywords.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 items-center">
-                    <span className="text-xs text-gray-500 shrink-0">트렌딩:</span>
-                    {trendMeta.trendKeywords.slice(0, 6).map((kw, i) => (
-                      <span key={i} className="text-xs bg-white text-green-600 px-2 py-0.5 rounded-full border border-green-200">{kw}</span>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-gray-400 border-b border-gray-100 bg-gray-50">
+                      <th className="text-left px-4 py-3 font-medium">키워드</th>
+                      <th className="text-center px-3 py-3 font-medium">순위</th>
+                      <th className="text-right px-3 py-3 font-medium">트렌드 지수</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trendKeywords.map((kw) => (
+                      <>
+                        <tr
+                          key={kw.keyword}
+                          onClick={() => toggleTrendKeyword(kw.keyword)}
+                          className="border-b border-gray-50 hover:bg-green-50 cursor-pointer transition-colors"
+                        >
+                          <td className="px-4 py-3 font-medium text-gray-800">{kw.keyword}</td>
+                          <td className="px-3 py-3 text-center text-gray-500">#{kw.rank}</td>
+                          <td className="px-3 py-3 text-right">
+                            <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-medium">
+                              {kw.ratio.toFixed(1)}
+                            </span>
+                          </td>
+                        </tr>
+                        {trendExpandedKeyword === kw.keyword && (
+                          <tr key={`ideas-${kw.keyword}`} className="bg-green-50 border-b border-gray-100">
+                            <td colSpan={3} className="px-4 py-4">
+                              {trendIdeasMap[kw.keyword] === 'loading' && (
+                                <p className="text-sm text-gray-400">💡 글감 생성 중...</p>
+                              )}
+                              {trendIdeasMap[kw.keyword] === 'error' && (
+                                <p className="text-sm text-red-400">글감 생성에 실패했습니다.</p>
+                              )}
+                              {Array.isArray(trendIdeasMap[kw.keyword]) && (
+                                <div className="space-y-3">
+                                  <p className="text-xs font-semibold text-gray-600 mb-2">💡 추천 글감 (AI 생성)</p>
+                                  {(trendIdeasMap[kw.keyword] as KeywordIdea[]).map((idea, j) => (
+                                    <div key={j} className="bg-white rounded-xl px-4 py-3 shadow-sm">
+                                      <p className="font-medium text-sm text-gray-800 mb-1.5">
+                                        <span className="text-green-500 mr-1">{j + 1}.</span>{idea.title}
+                                      </p>
+                                      <ul className="space-y-0.5">
+                                        {idea.points.map((pt, k) => (
+                                          <li key={k} className="text-xs text-gray-500 flex gap-1.5">
+                                            <span className="text-green-400 shrink-0">•</span>{pt}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     ))}
-                  </div>
-                )}
-                {trendMeta.seasonTopics.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 items-center">
-                    <span className="text-xs text-gray-500 shrink-0">시즌:</span>
-                    {trendMeta.seasonTopics.slice(0, 4).map((t, i) => (
-                      <span key={i} className="text-xs bg-white text-orange-500 px-2 py-0.5 rounded-full border border-orange-200">{t}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {trendResults.length > 0 && (
-              <div className="space-y-3">
-                {trendResults.map((idea, i) => (
-                  <div key={i} className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-                    <div className="flex items-start gap-3">
-                      <span className="text-lg shrink-0">{['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][i] || '•'}</span>
-                      <p className="font-bold text-gray-800 leading-snug">{idea.title}</p>
-                    </div>
-                    {idea.keywords.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {idea.keywords.map((kw, j) => (
-                          <span key={j} className="text-xs bg-green-50 text-green-600 px-2.5 py-1 rounded-full font-medium">{kw}</span>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-sm text-green-600 bg-green-50 px-3 py-2 rounded-xl leading-relaxed">{idea.reason}</p>
-                    <ul className="space-y-1.5">
-                      {idea.points.map((pt, j) => (
-                        <li key={j} className="flex gap-2 text-sm text-gray-600">
-                          <span className="text-green-400 shrink-0">•</span>
-                          <span>{pt}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
