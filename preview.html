@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>블로그황금키 🔑</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #171717; }
+    a { text-decoration: none; color: inherit; }
+    button { cursor: pointer; border: none; background: none; font-family: inherit; }
+
+    /* ── 공통 ── */
+    .btn-primary { background: #3b82f6; color: #fff; border-radius: 12px; font-size: 14px; font-weight: 500; padding: 12px 24px; transition: background .15s; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-outline { border: 1px solid #e5e7eb; border-radius: 12px; font-size: 14px; padding: 12px 24px; transition: border-color .15s; }
+    .btn-outline:hover { border-color: #9ca3af; }
+    .gradient-btn { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; border-radius: 9999px; font-size: 14px; font-weight: 500; padding: 14px 36px; box-shadow: 0 4px 20px rgba(99,102,241,.35); transition: opacity .15s; white-space: nowrap; }
+    .gradient-btn:hover { opacity: .9; }
+
+    /* ── 헤더 ── */
+    header { position: sticky; top: 0; z-index: 50; background: #fff; border-bottom: 1px solid #f3f4f6; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    .logo { font-weight: 700; font-size: 18px; cursor: pointer; }
+    .header-actions { display: flex; align-items: center; gap: 12px; }
+    .header-actions .link-btn { font-size: 14px; color: #6b7280; background: none; transition: color .15s; }
+    .header-actions .link-btn:hover { color: #111827; }
+
+    /* ── 랜딩 ── */
+    #landing { display: block; }
+    #dashboard { display: none; }
+
+    .hero { padding: 80px 24px; text-align: center; max-width: 672px; margin: 0 auto; }
+    .hero h1 { font-size: 32px; font-weight: 700; line-height: 1.35; margin-bottom: 16px; }
+    .hero p { color: #6b7280; margin-bottom: 32px; }
+    .search-row { display: flex; gap: 8px; max-width: 480px; margin: 0 auto 16px; }
+    .search-row input { flex: 1; padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 12px; font-size: 14px; outline: none; transition: border-color .15s; }
+    .search-row input:focus { border-color: #3b82f6; }
+    .full-btn { display: block; max-width: 480px; margin: 0 auto; width: 100%; border-radius: 12px; padding: 14px; font-size: 14px; font-weight: 500; text-align: center; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; transition: opacity .15s; cursor: pointer; }
+    .full-btn:hover { opacity: .9; }
+
+    /* 기능 섹션 */
+    .features-section { padding: 64px 24px; background: #f9fafb; }
+    .section-title { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 40px; }
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; max-width: 900px; margin: 0 auto; }
+    .feature-card { background: #fff; padding: 24px; border-radius: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .feature-card .icon { font-size: 32px; margin-bottom: 12px; }
+    .feature-card h3 { font-weight: 700; margin-bottom: 8px; }
+    .feature-card p { color: #6b7280; font-size: 14px; line-height: 1.6; }
+
+    /* 요금제 */
+    .pricing-section { padding: 64px 24px; max-width: 900px; margin: 0 auto; }
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; }
+    .plan-card { padding: 24px; border-radius: 20px; border: 2px solid #f3f4f6; position: relative; }
+    .plan-card.highlight { border-color: #3b82f6; }
+    .plan-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #3b82f6; color: #fff; font-size: 12px; padding: 4px 12px; border-radius: 9999px; }
+    .plan-card h3 { font-weight: 700; font-size: 18px; margin-bottom: 4px; }
+    .plan-desc { color: #9ca3af; font-size: 12px; margin-bottom: 12px; }
+    .plan-price { font-size: 24px; font-weight: 700; margin-bottom: 20px; }
+    .plan-features { list-style: none; margin-bottom: 24px; display: flex; flex-direction: column; gap: 8px; }
+    .plan-features li { font-size: 14px; color: #4b5563; display: flex; align-items: center; gap: 8px; }
+    .plan-features li span.check { color: #22c55e; }
+    .plan-cta { display: block; text-align: center; padding: 10px; border-radius: 12px; font-size: 14px; font-weight: 500; }
+    .plan-cta.primary { background: #3b82f6; color: #fff; }
+    .plan-cta.secondary { border: 1px solid #e5e7eb; }
+
+    /* FAB */
+    .fab { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 50; }
+
+    /* footer */
+    footer { padding: 32px 24px; border-top: 1px solid #f3f4f6; text-align: center; color: #9ca3af; font-size: 12px; }
+
+    /* ── 대시보드 ── */
+    .dash-header { background: #fff; border-bottom: 1px solid #f3f4f6; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    .dash-header .logo { font-weight: 700; font-size: 18px; }
+    .dash-header .user-info { display: flex; align-items: center; gap: 16px; font-size: 14px; color: #6b7280; }
+    .dash-header .logout-btn { color: #9ca3af; background: none; font-size: 14px; cursor: pointer; transition: color .15s; }
+    .dash-header .logout-btn:hover { color: #4b5563; }
+
+    .dash-main { max-width: 672px; margin: 0 auto; padding: 40px 24px; }
+
+    /* home 모드 */
+    .dash-home-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .dash-home-sub { color: #9ca3af; font-size: 14px; margin-bottom: 32px; }
+    .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 40px; }
+    .action-card { background: #fff; border: 2px solid #f3f4f6; padding: 24px; border-radius: 20px; text-align: left; cursor: pointer; transition: border-color .15s; }
+    .action-card:hover { border-color: #3b82f6; }
+    .action-card:hover h3 { color: #3b82f6; }
+    .action-card.disabled { opacity: .5; cursor: not-allowed; }
+    .action-card .icon { font-size: 24px; margin-bottom: 12px; }
+    .action-card h3 { font-weight: 700; margin-bottom: 4px; font-size: 15px; }
+    .action-card p { color: #9ca3af; font-size: 13px; }
+    .widget-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .widget { background: #fff; border-radius: 20px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .widget h3 { font-weight: 700; font-size: 13px; margin-bottom: 12px; }
+    .widget .empty { color: #9ca3af; font-size: 13px; text-align: center; margin-top: 16px; }
+
+    /* write-input 모드 */
+    .back-btn { color: #9ca3af; font-size: 14px; margin-bottom: 24px; display: inline-block; cursor: pointer; background: none; transition: color .15s; }
+    .back-btn:hover { color: #4b5563; }
+    .form-card { background: #fff; border-radius: 20px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.06); display: flex; flex-direction: column; gap: 20px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 8px; }
+    .form-group label .opt { color: #9ca3af; font-weight: 400; }
+    .form-group label .req { color: #f87171; }
+    .form-group input, .form-group textarea { width: 100%; padding: 12px 16px; border: 1px solid #e5e7eb; border-radius: 12px; font-size: 14px; font-family: inherit; outline: none; transition: border-color .15s; resize: none; }
+    .form-group input:focus, .form-group textarea:focus { border-color: #3b82f6; }
+    .form-group .hint { color: #9ca3af; font-size: 12px; margin-top: 4px; }
+
+    /* analyzing 모드 */
+    .analyzing-wrap { text-align: center; padding: 80px 0; }
+    .analyzing-wrap .icon { font-size: 32px; margin-bottom: 16px; }
+    .analyzing-wrap h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .analyzing-wrap p { color: #6b7280; font-size: 14px; margin-bottom: 4px; }
+    .analyzing-wrap .hint { color: #9ca3af; font-size: 12px; }
+    .spinner { width: 32px; height: 32px; border: 3px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* plan 모드 */
+    .plan-section { display: flex; flex-direction: column; gap: 16px; }
+    .data-card { background: #fff; border-radius: 20px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .data-card-title { font-size: 12px; font-weight: 500; color: #6b7280; margin-bottom: 12px; }
+    .stat-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .stat-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .stat-box { background: #f9fafb; border-radius: 12px; padding: 12px; text-align: center; }
+    .stat-box .label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    .stat-box .value { font-size: 14px; font-weight: 700; }
+    .stat-box .value.blue { color: #3b82f6; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .tag { font-size: 12px; background: #eff6ff; color: #3b82f6; padding: 4px 10px; border-radius: 8px; }
+    .title-option { width: 100%; text-align: left; padding: 12px 16px; border-radius: 12px; font-size: 14px; border: 2px solid #f3f4f6; cursor: pointer; transition: all .15s; display: block; background: #fff; font-family: inherit; }
+    .title-option.selected { border-color: #3b82f6; background: #eff6ff; color: #1d4ed8; }
+    .title-option:hover:not(.selected) { border-color: #e5e7eb; }
+    .plan-text { font-size: 14px; color: #374151; background: #f9fafb; padding: 12px 16px; border-radius: 12px; white-space: pre-line; line-height: 1.7; }
+    .feedback-card { background: #fff; border-radius: 20px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.06); display: flex; flex-direction: column; gap: 12px; }
+    .feedback-card h3 { font-weight: 700; font-size: 14px; }
+    .feedback-card p { color: #9ca3af; font-size: 12px; }
+    .feedback-card textarea { width: 100%; padding: 12px 16px; border: 1px solid #e5e7eb; border-radius: 12px; font-size: 14px; font-family: inherit; outline: none; resize: none; transition: border-color .15s; }
+    .feedback-card textarea:focus { border-color: #3b82f6; }
+    .btn-regen { width: 100%; background: #f3f4f6; color: #4b5563; padding: 10px; border-radius: 12px; font-size: 14px; font-weight: 500; transition: background .15s; }
+    .btn-regen:hover { background: #e5e7eb; }
+    .btn-write { width: 100%; background: #3b82f6; color: #fff; padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 500; transition: background .15s; }
+    .btn-write:hover { background: #2563eb; }
+
+    /* writing 모드 */
+    .writing-wrap { text-align: center; padding: 80px 0; }
+    .writing-wrap .icon { font-size: 40px; margin-bottom: 16px; }
+
+    /* done 모드 */
+    .done-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .done-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .done-keyword { color: #3b82f6; font-size: 14px; font-weight: 500; margin-bottom: 24px; }
+    .done-content { background: #fff; border-radius: 20px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.06); font-size: 14px; color: #374151; line-height: 1.8; white-space: pre-wrap; }
+    .copy-btn { background: #3b82f6; color: #fff; font-size: 14px; padding: 8px 16px; border-radius: 8px; transition: background .15s; }
+    .copy-btn:hover { background: #2563eb; }
+    .copy-btn.copied { background: #22c55e; }
+
+    /* 반응형 */
+    @media (max-width: 600px) {
+      .action-grid { grid-template-columns: 1fr; }
+      .widget-grid { grid-template-columns: 1fr; }
+      .stat-grid-3 { grid-template-columns: repeat(3,1fr); }
+      .pricing-grid, .features-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════ 랜딩 ════════════════════ -->
+<div id="landing">
+  <header>
+    <div class="logo">블로그황금키 🔑</div>
+    <div class="header-actions">
+      <button class="link-btn">7일 무료혜택</button>
+      <button class="btn-primary" onclick="showDashboard()" style="padding:8px 16px;border-radius:8px;">가입/로그인</button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1>황금키워드 발굴부터<br />상위노출 글 완성까지</h1>
+    <p>분석할 키워드를 입력하세요</p>
+    <div class="search-row">
+      <input type="text" placeholder="예: 압구정 맛집" id="hero-input" />
+      <button class="btn-primary" onclick="showDashboard()">분석</button>
+    </div>
+    <button class="full-btn" onclick="showDashboard()">로그인 후 무료로 사용하기</button>
+  </section>
+
+  <section class="features-section">
+    <h2 class="section-title">주요 기능</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="icon">🔍</div>
+        <h3>황금키워드 발굴</h3>
+        <p>검색량 높고 경쟁 낮은 키워드를 자동으로 찾아드려요</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📊</div>
+        <h3>상위노출 역분석</h3>
+        <p>현재 상위노출된 글의 패턴을 분석해 최적화된 글을 작성해요</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">✍️</div>
+        <h3>딸깍 글 완성</h3>
+        <p>5줄 요약 확인 후 승인하면 상위노출 규격의 글이 완성돼요</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="pricing-section">
+    <h2 class="section-title">요금제</h2>
+    <div class="pricing-grid">
+      <div class="plan-card">
+        <h3>스타터</h3>
+        <p class="plan-desc">블로그 시작하는 분</p>
+        <div class="plan-price">월 29,000원</div>
+        <ul class="plan-features">
+          <li><span class="check">✓</span> 키워드 분석 무제한</li>
+          <li><span class="check">✓</span> 글 생성 20회/월</li>
+          <li><span class="check">✓</span> 황금키워드 추천</li>
+        </ul>
+        <button class="plan-cta secondary" onclick="showDashboard()">7일 무료체험</button>
+      </div>
+      <div class="plan-card highlight">
+        <div class="plan-badge">추천</div>
+        <h3>프로</h3>
+        <p class="plan-desc">수익화 목표 블로거</p>
+        <div class="plan-price">월 59,000원</div>
+        <ul class="plan-features">
+          <li><span class="check">✓</span> 키워드 분석 무제한</li>
+          <li><span class="check">✓</span> 글 생성 60회/월</li>
+          <li><span class="check">✓</span> 역분석 무제한</li>
+          <li><span class="check">✓</span> 발행 캘린더</li>
+          <li><span class="check">✓</span> 순위 추적</li>
+        </ul>
+        <button class="plan-cta primary" onclick="showDashboard()">7일 무료체험</button>
+      </div>
+      <div class="plan-card">
+        <h3>비즈</h3>
+        <p class="plan-desc">체험단·협찬 전문</p>
+        <div class="plan-price">월 99,000원</div>
+        <ul class="plan-features">
+          <li><span class="check">✓</span> 키워드 분석 무제한</li>
+          <li><span class="check">✓</span> 글 생성 100회/월</li>
+          <li><span class="check">✓</span> 전체 기능</li>
+          <li><span class="check">✓</span> 체험단 크롤러</li>
+          <li><span class="check">✓</span> 월간 리포트</li>
+        </ul>
+        <button class="plan-cta secondary" onclick="showDashboard()">7일 무료체험</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="fab">
+    <button class="gradient-btn" onclick="showDashboard()">7일 무료체험 시작하기 →</button>
+  </div>
+
+  <footer style="margin-bottom:80px;">© 2026 블로그황금키. All rights reserved.</footer>
+</div>
+
+<!-- ════════════════════ 대시보드 ════════════════════ -->
+<div id="dashboard">
+  <div class="dash-header">
+    <div class="logo" onclick="setMode('home')">블로그황금키 🔑</div>
+    <div class="user-info">
+      <span>user@example.com</span>
+      <button class="logout-btn" onclick="showLanding()">로그아웃</button>
+    </div>
+  </div>
+
+  <div class="dash-main">
+
+    <!-- home -->
+    <div id="mode-home">
+      <h2 class="dash-home-title">지금 어떤 글 쓸까요?</h2>
+      <p class="dash-home-sub">작성 주제와 키워드를 입력하면 상위노출 전략을 분석해드려요</p>
+      <div class="action-grid">
+        <div class="action-card" onclick="setMode('write-input')">
+          <div class="icon">✍️</div>
+          <h3>블로그 글 작성하기</h3>
+          <p>주제와 키워드 입력 후 상위노출 글 자동 분석</p>
+        </div>
+        <div class="action-card disabled">
+          <div class="icon">📊</div>
+          <h3>키워드 리서치</h3>
+          <p>준비 중</p>
+        </div>
+      </div>
+      <div class="widget-grid">
+        <div class="widget"><h3>📅 발행 캘린더</h3><p class="empty">준비 중</p></div>
+        <div class="widget"><h3>📊 순위 추적</h3><p class="empty">준비 중</p></div>
+        <div class="widget"><h3>📝 최근 작성한 글</h3><p class="empty">준비 중</p></div>
+      </div>
+    </div>
+
+    <!-- write-input -->
+    <div id="mode-write-input" style="display:none;">
+      <button class="back-btn" onclick="setMode('home')">← 뒤로</button>
+      <h2 class="dash-home-title">글 작성 정보 입력</h2>
+      <p class="dash-home-sub">아래 정보를 입력하면 상위노출 전략을 자동으로 분석해드려요</p>
+      <div class="form-card">
+        <div class="form-group">
+          <label>작성 주제 <span class="opt">(선택)</span></label>
+          <input type="text" placeholder="예: 문래동즉석떡볶이 엄마랑 방문 후기" id="inp-topic" />
+          <p class="hint">어떤 내용을 쓸지 간단하게 적어주세요</p>
+        </div>
+        <div class="form-group">
+          <label>타겟 키워드 <span class="req">*</span></label>
+          <input type="text" placeholder="예: 영등포역맛집" id="inp-keyword" onkeydown="if(event.key==='Enter')startDemo()" />
+          <p class="hint">상위노출 시키고 싶은 메인 키워드 1개</p>
+        </div>
+        <div class="form-group">
+          <label>참고사항 <span class="opt">(선택)</span></label>
+          <textarea rows="5" placeholder="예:&#10;가게명: 문래동즉석떡볶이&#10;주소: 서울 영등포구 경인로 775&#10;영업시간: 월~금 11:00-21:00&#10;메뉴: 즉석떡볶이 4,000원&#10;방문: 엄마랑 목요일 점심" id="inp-notes"></textarea>
+          <p class="hint">가게 정보, 체험단 조건, 개인 경험 등 글에 포함할 내용</p>
+        </div>
+        <div class="form-group">
+          <label>참고 링크 <span class="opt">(선택)</span></label>
+          <input type="text" placeholder="예: https://map.naver.com/p/... (네이버 플레이스 URL)" id="inp-link" />
+          <p class="hint">네이버 플레이스 링크 입력 시 가게 정보 자동 추출 예정</p>
+        </div>
+        <button class="btn-write" onclick="startDemo()">상위노출 분석 시작 →</button>
+      </div>
+    </div>
+
+    <!-- analyzing -->
+    <div id="mode-analyzing" style="display:none;">
+      <div class="analyzing-wrap">
+        <div class="spinner"></div>
+        <h2>분석 중이에요</h2>
+        <p>상위노출된 글 전체를 분석하고 있어요</p>
+        <p class="hint">잠시만 기다려 주세요 ☕</p>
+      </div>
+    </div>
+
+    <!-- plan -->
+    <div id="mode-plan" style="display:none;">
+      <button class="back-btn" onclick="setMode('write-input')">← 뒤로</button>
+      <h2 class="dash-home-title">글 기획안</h2>
+      <p style="color:#9ca3af;font-size:14px;margin-bottom:24px;">키워드: <span style="color:#3b82f6;font-weight:500;" id="plan-keyword-label"></span></p>
+
+      <div class="plan-section">
+        <!-- 키워드 분석 -->
+        <div class="data-card">
+          <p class="data-card-title">📊 키워드 분석 결과</p>
+          <div class="stat-grid-3">
+            <div class="stat-box"><p class="label">월 검색량</p><p class="value" id="stat-search">-</p></div>
+            <div class="stat-box"><p class="label">블로그 글수</p><p class="value" id="stat-blogs">-</p></div>
+            <div class="stat-box"><p class="label">등급</p><p class="value" id="stat-grade">-</p></div>
+          </div>
+        </div>
+
+        <!-- 전략 -->
+        <div class="data-card">
+          <p class="data-card-title">🎯 상위노출 전략</p>
+          <div class="stat-grid-2" style="margin-bottom:12px;">
+            <div class="stat-box"><p class="label">권장 분량</p><p class="value" id="strat-length">-</p></div>
+            <div class="stat-box"><p class="label">평균 이미지</p><p class="value" id="strat-images">-</p></div>
+            <div class="stat-box"><p class="label">노릴 블록</p><p class="value blue" id="strat-block">-</p></div>
+            <div class="stat-box"><p class="label">소제목 형식</p><p class="value" id="strat-sojeomok">-</p></div>
+          </div>
+          <p style="font-size:12px;color:#6b7280;margin-bottom:6px;">문장 스타일</p>
+          <p class="plan-text" id="strat-style">-</p>
+          <p style="font-size:12px;color:#6b7280;margin-top:12px;margin-bottom:6px;">연관 키워드</p>
+          <div class="tags" id="strat-tags"></div>
+        </div>
+
+        <!-- 기획안 -->
+        <div class="data-card" style="padding:24px;display:flex;flex-direction:column;gap:20px;">
+          <div>
+            <p class="data-card-title">제목 후보 (선택해주세요)</p>
+            <div id="title-options" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+          <div>
+            <p class="data-card-title">글 구조</p>
+            <p class="plan-text" id="plan-structure">-</p>
+          </div>
+          <div>
+            <p class="data-card-title">작성 전략</p>
+            <p class="plan-text" id="plan-strategy">-</p>
+          </div>
+        </div>
+
+        <!-- 수정 요청 -->
+        <div class="feedback-card">
+          <h3>💬 수정 요청</h3>
+          <p>기획안이 마음에 안 드시나요? 수정 사항을 입력해주세요</p>
+          <textarea rows="3" placeholder="예: 제목을 더 친근하게, 구조에 마무리 추가..." id="inp-feedback"></textarea>
+          <button class="btn-regen" onclick="alert('실제 서비스에서는 AI가 피드백을 반영해 재생성해요!')">수정 요청 반영해서 재생성</button>
+          <button class="btn-write" onclick="setMode('writing'); setTimeout(()=>setMode('done'), 2000)">이 기획으로 글 작성하기 →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- writing -->
+    <div id="mode-writing" style="display:none;">
+      <div class="writing-wrap">
+        <div class="icon">✍️</div>
+        <h2 style="font-size:20px;font-weight:700;margin-bottom:8px;">블로그 글 작성 중...</h2>
+        <p style="color:#9ca3af;font-size:14px;">상위노출 규격에 맞게 작성하고 있어요</p>
+        <div class="spinner" style="margin-top:24px;"></div>
+      </div>
+    </div>
+
+    <!-- done -->
+    <div id="mode-done" style="display:none;">
+      <div class="done-header">
+        <button class="back-btn" style="margin-bottom:0;" onclick="setMode('home')">← 처음으로</button>
+        <button class="copy-btn" id="copy-btn" onclick="copyContent()">전체 복사</button>
+      </div>
+      <h2 class="done-title">완성된 블로그 글</h2>
+      <p class="done-keyword" id="done-title-label"></p>
+      <div class="done-content" id="done-content"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  /* ── 상태 ── */
+  const DEMO = {
+    keyword: '',
+    titles: [
+      '[영등포역맛집] 엄마랑 함께한 문래동즉석떡볶이 솔직 후기',
+      '영등포역 근처 숨은 맛집, 4000원짜리 즉석떡볶이의 정체',
+      '문래동즉석떡볶이 솔직 방문기 | 영등포역맛집 찾는다면 여기',
+    ],
+    selectedTitle: '',
+  };
+
+  /* ── 화면 전환 ── */
+  function showLanding() {
+    document.getElementById('landing').style.display = 'block';
+    document.getElementById('dashboard').style.display = 'none';
+  }
+  function showDashboard() {
+    document.getElementById('landing').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    setMode('home');
+  }
+
+  const MODES = ['home','write-input','analyzing','plan','writing','done'];
+  function setMode(m) {
+    MODES.forEach(id => {
+      const el = document.getElementById('mode-' + id);
+      if (el) el.style.display = (id === m) ? '' : 'none';
+    });
+  }
+
+  /* ── 데모 분석 시작 ── */
+  function startDemo() {
+    const kw = document.getElementById('inp-keyword').value.trim();
+    if (!kw) { alert('키워드를 입력해주세요'); return; }
+    DEMO.keyword = kw;
+    setMode('analyzing');
+    setTimeout(() => buildPlanUI(), 2200);
+  }
+
+  /* ── 기획안 UI 채우기 ── */
+  function buildPlanUI() {
+    const kw = DEMO.keyword;
+    document.getElementById('plan-keyword-label').textContent = kw;
+
+    // 키워드 통계 (랜덤 데모값)
+    const search = (Math.floor(Math.random() * 8 + 2) * 1000).toLocaleString();
+    const blogs = (Math.floor(Math.random() * 50 + 10) * 1000).toLocaleString();
+    const grades = ['S급 황금', 'A급 황금', 'B급 양호'];
+    document.getElementById('stat-search').textContent = search;
+    document.getElementById('stat-blogs').textContent = blogs;
+    document.getElementById('stat-grade').textContent = grades[Math.floor(Math.random()*3)];
+
+    // 전략
+    document.getElementById('strat-length').textContent = '1,800~2,200자';
+    document.getElementById('strat-images').textContent = '7~10장';
+    document.getElementById('strat-block').textContent = '파워블로거 VIEW';
+    document.getElementById('strat-sojeomok').textContent = '질문형 소제목';
+    document.getElementById('strat-style').textContent = '친근하고 생생한 구어체, 경험 위주 서술';
+    const tags = ['맛집', '분위기좋은', '혼밥', '주차가능', '데이트코스'];
+    document.getElementById('strat-tags').innerHTML = tags.map(t => `<span class="tag">${t}</span>`).join('');
+
+    // 제목 후보
+    const titles = [
+      `[${kw}] 엄마랑 함께한 문래동즉석떡볶이 솔직 후기`,
+      `${kw} 근처 숨은 맛집, 4000원짜리 즉석떡볶이의 정체`,
+      `문래동즉석떡볶이 솔직 방문기 | ${kw} 찾는다면 여기`,
+    ];
+    DEMO.titles = titles;
+    DEMO.selectedTitle = titles[0];
+    const container = document.getElementById('title-options');
+    container.innerHTML = titles.map((t, i) =>
+      `<button class="title-option ${i===0?'selected':''}" onclick="selectTitle(this, '${t.replace(/'/g,"\\'")}')">
+        ${t}
+      </button>`
+    ).join('');
+
+    // 구조
+    document.getElementById('plan-structure').textContent =
+      `1. 인트로 — 방문 동기 & 첫인상 (감성)\n2. 위치·주차 정보\n3. 메뉴 소개 & 가격\n4. 맛 후기 (구체적 묘사)\n5. 분위기·서비스 평가\n6. 총평 & 재방문 의사\n7. 정보 요약 박스 (CTA)`;
+
+    document.getElementById('plan-strategy').textContent =
+      `• 제목에 키워드 1회 자연스럽게 배치\n• 소제목은 질문형으로 궁금증 유발\n• 이미지 7장 이상, 음식·메뉴판·외관 포함\n• 본문 첫 100자 안에 키워드 포함\n• 마지막에 정보 요약 박스로 가독성 UP`;
+
+    setMode('plan');
+  }
+
+  function selectTitle(btn, title) {
+    document.querySelectorAll('.title-option').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    DEMO.selectedTitle = title;
+  }
+
+  /* ── 완성 글 ── */
+  function buildDoneUI() {
+    document.getElementById('done-title-label').textContent = DEMO.selectedTitle;
+    document.getElementById('done-content').textContent = `${DEMO.selectedTitle}
+
+안녕하세요! 오늘은 엄마랑 함께 다녀온 ${DEMO.keyword} 솔직 후기를 들고 왔어요 🙌
+
+평소에 즉석떡볶이를 워낙 좋아해서 근처를 지나다 발견했는데, 외관부터 너무 아늑하고 정겨운 느낌이라 바로 들어갔어요.
+
+📍 위치 & 주차
+서울 영등포구 경인로 775에 위치해 있고, 지하철로는 도보 5분 거리예요. 근처에 공영주차장도 있어서 차 가져가도 걱정 없어요!
+
+🍜 메뉴 & 가격
+메인 메뉴는 즉석떡볶이 단 하나! 가격은 4,000원으로 정말 착해요. 1인분도 가능하고, 추가 주문도 물론 됩니다.
+
+😋 맛은 어떤가요?
+라볶이처럼 국물이 자작하게 끓여져 나오는 타입이었는데, 첫 한 젓가락에 엄마도 저도 눈이 동그래졌어요. 달달하면서도 칼칼한 맛의 균형이 딱 좋고, 떡은 쫄깃함이 살아 있어서 씹는 맛도 최고였답니다.
+
+✨ 분위기 & 서비스
+작은 가게지만 아기자기하게 꾸며져 있고, 사장님이 너무 친절하게 맞아주셔서 기분 좋게 먹었어요. 혼밥도 전혀 부담 없는 분위기예요!
+
+📝 총평
+4,000원에 이 퀄리티면 진짜 가성비 끝판왕이에요. ${DEMO.keyword} 찾으시는 분들, 여기 무조건 가보세요! 재방문 의사 200%입니다 ❤️
+
+━━━━━━━━━━━━━━━━━━━━━
+📌 가게 정보
+이름: 문래동즉석떡볶이
+주소: 서울 영등포구 경인로 775
+영업: 월~금 11:00-21:00
+가격: 즉석떡볶이 4,000원
+━━━━━━━━━━━━━━━━━━━━━`;
+  }
+
+  /* ── 복사 ── */
+  function copyContent() {
+    const text = document.getElementById('done-content').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = '복사됨 ✓';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '전체 복사'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  /* ── writing → done 자동 전환 시 글 빌드 ── */
+  const _orig = window.setMode;
+  window.setMode = function(m) {
+    if (m === 'done') buildDoneUI();
+    MODES.forEach(id => {
+      const el = document.getElementById('mode-' + id);
+      if (el) el.style.display = (id === m) ? '' : 'none';
+    });
+  };
+</script>
+</body>
+</html>

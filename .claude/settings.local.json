@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node index.js)",
+      "Bash(curl *)",
+      "Bash(npm run *)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"https://acdrheuzneukvthrwrji.supabase.co/auth/v1/health\" -TimeoutSec 8 -ErrorAction Stop; $r.StatusCode } catch { $_.Exception.Message })",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"cd C:\\\\Users\\\\soyi\\\\blog-golden-key\\\\crawler; node index.js\")",
+      "PowerShell(Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"cd C:\\\\Users\\\\soyi\\\\blog-golden-key; npm run dev\")",
+      "PowerShell(npm install *)",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\soyi\\\\blog-golden-key\\\\src\\\\app\\\\signup\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"done\")",
+      "Bash(npx next *)",
+      "Bash(npx tsc *)",
+      "PowerShell(taskkill *)",
+      "Bash(echo \"PID $!\")",
+      "Read(//tmp/**)",
+      "PowerShell(Get-Process *)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(node *)",
+      "Bash(Read *)",
+      "Bash(npm install *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git rm *)"
+    ]
+  }
+}

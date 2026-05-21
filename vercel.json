@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/build-keywords",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/update-blog-counts",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/fetch-trends",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-season",
+      "schedule": "0 6 1 * *"
+    }
+  ]
+}
