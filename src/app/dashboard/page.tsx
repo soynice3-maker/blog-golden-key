@@ -1482,7 +1482,7 @@ export default function DashboardPage() {
                       <th className="text-right px-3 py-3 font-medium">
                         <span className="group relative cursor-help inline-block">
                           트렌드 지수
-                          <span className="absolute bottom-full right-0 mb-1.5 w-44 bg-gray-800 text-white text-xs rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal text-center z-50">
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-44 bg-blue-100/90 text-blue-700 text-xs rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal text-center z-50">
                             검색 인기도 (높을수록 핫함)
                           </span>
                         </span>
