@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
@@ -30,7 +30,6 @@ function EyeIcon({ open }: { open: boolean }) {
 }
 
 export default function ResetPasswordPage() {
-  const searchParams = useSearchParams()
   const router = useRouter()
   const supabase = createClient()
 
