@@ -185,6 +185,13 @@ function runAnalysis(keyword: string, cd: CrawlData): Analysis {
   const allTitles = cd.allTitles || []
   const posts = cd.posts || []
 
+  // 키워드가 제목에 포함된 글만 키워드 분석에 사용 (무관한 글 필터링)
+  const relevantPosts = posts.filter(p =>
+    p.title.toLowerCase().replace(/\s+/g, '').includes(kwLowerNospace) ||
+    p.title.toLowerCase().includes(kwLower)
+  )
+  const analyzePosts = relevantPosts.length >= Math.min(3, posts.length) ? relevantPosts : posts
+
   // ── 제목 위치
   let frontCount = 0, middleCount = 0, backCount = 0
   let spacedCount = 0, joinedCount = 0
@@ -220,8 +227,8 @@ function runAnalysis(keyword: string, cd: CrawlData): Analysis {
     .sort((a, b) => b.count - a.count)
     .slice(0, 8)
 
-  // ── 본문 키워드 분석
-  const perPostKw = posts.map(p => {
+  // ── 본문 키워드 분석 (관련 글만)
+  const perPostKw = analyzePosts.map(p => {
     const text = (p.fullText || '').toLowerCase().replace(/\s+/g, '')
     const matches = text.match(new RegExp(kwLowerNospace, 'g')) || []
     const density = text.length > 0 ? Math.round((matches.length / text.length) * 1000 * 10) / 10 : 0
@@ -234,8 +241,8 @@ function runAnalysis(keyword: string, cd: CrawlData): Analysis {
     ? Math.round((perPostKw.reduce((s, p) => s + p.density, 0) / perPostKw.length) * 10) / 10
     : 0
 
-  // ── 첫 등장 위치
-  const firstPositions = posts
+  // ── 첫 등장 위치 (관련 글만)
+  const firstPositions = analyzePosts
     .map(p => {
       const text = (p.fullText || '').toLowerCase().replace(/\s+/g, '')
       const idx = text.indexOf(kwLowerNospace)
@@ -249,15 +256,15 @@ function runAnalysis(keyword: string, cd: CrawlData): Analysis {
     avgFirstPct <= 15 ? `본문 초반 (상위 ${avgFirstPct}%)` :
     avgFirstPct <= 35 ? `본문 중반 (상위 ${avgFirstPct}%)` : `본문 후반 (상위 ${avgFirstPct}%)`
 
-  // ── 인트로(첫 200자) 키워드 등장
-  const introKwCount = posts.filter(p => {
+  // ── 인트로(첫 200자) 키워드 등장 (관련 글만)
+  const introKwCount = analyzePosts.filter(p => {
     const intro = (p.fullText || '').replace(/\s+/g, '').slice(0, 200).toLowerCase()
     return intro.includes(kwLowerNospace)
   }).length
 
-  // ── 연관 키워드 빈도
+  // ── 연관 키워드 빈도 (관련 글만)
   const wordFreq: Record<string, number> = {}
-  const allText = posts.map(p => p.fullText || '').join(' ')
+  const allText = analyzePosts.map(p => p.fullText || '').join(' ')
   const words = allText.match(/[가-힣]{2,6}/g) || []
   words.forEach(w => {
     if (STOP_WORDS.has(w)) return
