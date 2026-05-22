@@ -552,6 +552,7 @@ export default function DashboardPage() {
     })
     const handlePopState = () => {
       setMode('home')
+      resetAll()
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
