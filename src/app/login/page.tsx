@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -25,8 +25,19 @@ export default function LoginPage() {
   const [findName, setFindName] = useState('')
   const [findPhone, setFindPhone] = useState('')
   const [foundEmail, setFoundEmail] = useState('')
+  const [authChecking, setAuthChecking] = useState(true)
   const router = useRouter()
   const supabase = createClient()
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        router.replace('/dashboard')
+      } else {
+        setAuthChecking(false)
+      }
+    })
+  }, [])
 
   const reset = (next: Mode) => {
     setMode(next)
@@ -98,7 +109,7 @@ export default function LoginPage() {
       } else {
         localStorage.setItem('bgk-stay-logged-in', stayLoggedIn ? 'true' : 'false')
         sessionStorage.setItem('bgk-session-active', 'true')
-        router.push('/dashboard')
+        router.replace('/dashboard')
       }
     }
     setLoading(false)
@@ -106,6 +117,8 @@ export default function LoginPage() {
 
   const title = mode === 'login' ? '로그인' : mode === 'signup' ? '회원가입' : mode === 'findPassword' ? '비밀번호 찾기' : '아이디 찾기'
   const buttonLabel = loading ? '처리 중...' : title
+
+  if (authChecking) return null
 
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center px-4">

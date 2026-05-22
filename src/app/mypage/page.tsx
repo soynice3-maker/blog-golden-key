@@ -57,7 +57,7 @@ export default function MyPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) { router.push('/login'); return }
+      if (!user) { router.replace('/login'); return }
       const m = user.user_metadata
       setUserEmail(user.email ?? '')
       setName(m?.name ?? '')

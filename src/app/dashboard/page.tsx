@@ -546,11 +546,23 @@ export default function DashboardPage() {
   useEffect(() => {
     setMounted(true)
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) router.push('/login')
+      if (!user) router.replace('/login')
       else setUser(user)
       setLoading(false)
     })
+    const handlePopState = () => {
+      setMode('home')
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [])
+
+  // home이 아닌 모드로 진입할 때 히스토리 쌓기 → 뒤로가기 시 home으로 복귀
+  useEffect(() => {
+    if (mode !== 'home') {
+      window.history.pushState(null, '', '/dashboard')
+    }
+  }, [mode])
 
   const resetAll = () => {
     setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
@@ -880,7 +892,7 @@ export default function DashboardPage() {
                 <input type="text" placeholder="예: 몽밀, 로라멘, 스타벅스"
                   value={brandName} onChange={e => setBrandName(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 mt-1 pl-4">입력하면 해당 가게·브랜드 관련 글만 골라 분석해요</p>
+                <p className="text-xs text-gray-400 mt-1 pl-4">입력하면 내 가게 브랜드에 딱 맞는 분석 결과가 나와요</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">타겟 키워드 <span className="text-red-400">*</span></label>
@@ -1547,7 +1559,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {trendKeywords.map((kw) => (
+                    {trendKeywords.map((kw, i) => (
                       <>
                         <tr
                           key={kw.keyword}
@@ -1555,7 +1567,7 @@ export default function DashboardPage() {
                           className="border-b border-gray-50 hover:bg-green-50 cursor-pointer transition-colors"
                         >
                           <td className="px-4 py-3 font-medium text-gray-800">{kw.keyword}</td>
-                          <td className="px-3 py-3 text-center text-gray-500">#{kw.rank}</td>
+                          <td className="px-3 py-3 text-center text-gray-500">#{i + 1}</td>
                           <td className="px-3 py-3 text-right">
                             <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-medium">
                               {kw.ratio.toFixed(1)}

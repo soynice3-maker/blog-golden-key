@@ -29,16 +29,19 @@ export async function GET(request: NextRequest) {
   const today = new Date().toISOString().split('T')[0]
   const results: Record<string, number> = {}
 
+  const errors: Record<string, string> = {}
+
   for (const category of CATEGORIES) {
     try {
       // 해당 카테고리의 시드 키워드 가져오기
-      const { data: seeds } = await supabase
+      const { data: seeds, error: seedErr } = await supabase
         .from('seed_keywords')
         .select('keyword')
         .eq('category', category)
         .limit(SEEDS_PER_CATEGORY)
 
-      if (!seeds || seeds.length === 0) continue
+      if (seedErr) { errors[category] = `seed error: ${seedErr.message}`; continue }
+      if (!seeds || seeds.length === 0) { errors[category] = 'no seeds'; continue }
 
       const keywords = seeds.map(s => s.keyword)
       const trends = await getTrendingKeywords(keywords)
@@ -46,7 +49,6 @@ export async function GET(request: NextRequest) {
 
       if (top.length === 0) continue
 
-      // trend_datalab 테이블에 upsert
       const rows = top.map((t, i) => ({
         category,
         keyword: t.keyword,
@@ -55,11 +57,21 @@ export async function GET(request: NextRequest) {
         collected_at: today,
       }))
 
+      // 성공한 경우에만 기존 데이터 교체
       await supabase
         .from('trend_datalab')
-        .upsert(rows, { onConflict: 'category,keyword,collected_at' })
+        .delete()
+        .eq('category', category)
+        .eq('collected_at', today)
+
+      await supabase
+        .from('trend_datalab')
+        .insert(rows)
 
       results[category] = top.length
+
+      // 카테고리 간 API 과부하 방지
+      await new Promise(r => setTimeout(r, 500))
 
       // entertain 카테고리는 trend_broadcast에도 저장
       if (category === 'entertain') {
@@ -74,9 +86,11 @@ export async function GET(request: NextRequest) {
           .upsert(broadcastRows, { onConflict: 'keyword,collected_at' })
       }
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      errors[category] = msg
       console.error(`트렌드 수집 실패 [${category}]`, e)
     }
   }
 
-  return NextResponse.json({ date: today, categories: results })
+  return NextResponse.json({ date: today, categories: results, errors })
 }

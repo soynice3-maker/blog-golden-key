@@ -36,8 +36,13 @@ export async function getSearchTrends(
     signal: AbortSignal.timeout(10000),
   })
 
-  if (!response.ok) throw new Error(`DataLab API 오류: ${response.status}`)
+  if (!response.ok) {
+    const errBody = await response.text()
+    console.log('[DataLab 에러]', response.status, errBody.slice(0, 300))
+    throw new Error(`DataLab API 오류: ${response.status}`)
+  }
   const data = await response.json()
+  console.log('[DataLab 응답]', JSON.stringify(data).slice(0, 500))
 
   return (data.results || []).map((r: any) => ({
     groupName: r.title,
@@ -61,8 +66,10 @@ export async function getTrendingKeywords(keywords: string[]): Promise<{ keyword
     try {
       const trends = await getSearchTrends(groups)
       trends.forEach(t => results.push({ keyword: t.groupName, ratio: t.avgRatio }))
-    } catch {
-      batch.forEach(kw => results.push({ keyword: kw, ratio: 0 }))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.log('[DataLab 배치 에러]', msg)
+      throw e  // 에러를 위로 전달
     }
 
     // 과도한 요청 방지

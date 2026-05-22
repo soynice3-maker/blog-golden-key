@@ -11,7 +11,10 @@ export default function LandingPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setUser(user))
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) { router.replace('/dashboard'); return }
+      setUser(null)
+    })
   }, [])
 
   const isTrialExpired = (user: any) => {
@@ -23,14 +26,14 @@ export default function LandingPage() {
 
   const handleAnalyze = () => {
     if (!user) {
-      router.push('/login?tab=signup')
+      router.replace('/login?tab=signup')
       return
     }
     if (isTrialExpired(user)) {
-      router.push('/login')
+      router.replace('/login')
       return
     }
-    router.push('/dashboard')
+    router.replace('/dashboard')
   }
 
   return (

@@ -19,15 +19,25 @@ export async function GET(request: NextRequest) {
   if (!category) return NextResponse.json({ error: '카테고리를 선택해주세요' }, { status: 400 })
 
   const admin = adminClient()
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+  // 가장 최근 수집 날짜 조회
+  const { data: latest } = await admin
+    .from('trend_datalab')
+    .select('collected_at')
+    .eq('category', category)
+    .order('collected_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (!latest) return NextResponse.json({ keywords: [] })
 
   const { data, error } = await admin
     .from('trend_datalab')
     .select('keyword, ratio, rank, collected_at')
     .eq('category', category)
-    .gte('collected_at', since)
+    .eq('collected_at', latest.collected_at)
     .order('ratio', { ascending: false })
-    .limit(20)
+    .limit(10)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
