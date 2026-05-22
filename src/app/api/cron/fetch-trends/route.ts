@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getTrendingKeywords } from '@/lib/naver-datalab'
+import { getDailyTrendingKeywords } from '@/lib/google-trends'
 
 const CATEGORIES = [
   'travel', 'fashion', 'beauty', 'food', 'tech_it', 'auto', 'living',
@@ -73,23 +74,35 @@ export async function GET(request: NextRequest) {
       // 카테고리 간 API 과부하 방지
       await new Promise(r => setTimeout(r, 500))
 
-      // entertain 카테고리는 trend_broadcast에도 저장
-      if (category === 'entertain') {
-        const broadcastRows = top.map((t, i) => ({
-          keyword: t.keyword,
-          ratio: t.ratio,
-          rank: i + 1,
-          collected_at: today,
-        }))
-        await supabase
-          .from('trend_broadcast')
-          .upsert(broadcastRows, { onConflict: 'keyword,collected_at' })
-      }
-    } catch (e) {
+} catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       errors[category] = msg
       console.error(`트렌드 수집 실패 [${category}]`, e)
     }
+  }
+
+  // Google Trends 급상승 키워드 추가
+  try {
+    const googleItems = await getDailyTrendingKeywords()
+    const byCategory: Record<string, typeof googleItems> = {}
+    googleItems.forEach(item => {
+      if (!byCategory[item.category]) byCategory[item.category] = []
+      byCategory[item.category].push(item)
+    })
+
+    for (const [category, items] of Object.entries(byCategory)) {
+      const rows = items.slice(0, 5).map((item, i) => ({
+        category,
+        keyword: item.keyword,
+        ratio: 100 - (item.rank - 1) * 5, // 순위 기반 점수
+        rank: 100 + i + 1, // 기존 DataLab 순위와 구분 (100번대)
+        collected_at: today,
+      }))
+      await supabase.from('trend_datalab').upsert(rows, { onConflict: 'category,keyword,collected_at' })
+    }
+    results['google_trends'] = googleItems.length
+  } catch (e) {
+    errors['google_trends'] = e instanceof Error ? e.message : String(e)
   }
 
   return NextResponse.json({ date: today, categories: results, errors })

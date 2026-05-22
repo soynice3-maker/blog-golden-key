@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error, count } = await supabase
     .from('keywords')
-    .select('keyword, pc_volume, mobile_volume, total_volume, blog_count, competition_label', { count: 'exact' })
+    .select('keyword, pc_volume, mobile_volume, total_volume, blog_count, competition_label, trend_score', { count: 'exact' })
     .eq('category', category)
     .gte('total_volume', 1000)
     .lte('total_volume', 10000)

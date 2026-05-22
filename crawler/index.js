@@ -1,6 +1,4 @@
-process.env.NAVER_CLIENT_ID = 'lfuxCOrUModFcHr4cmpZ'
-process.env.NAVER_CLIENT_SECRET = 'ZH2iutlcLE'
-
+const { chromium } = require('playwright')
 const express = require('express')
 
 const HASHTAG_STOPS = new Set([
@@ -35,7 +33,57 @@ function cleanHashtags(tags) {
       .filter(t => t.length >= 2 && !HASHTAG_STOPS.has(t))
   )]
 }
-const { chromium } = require('playwright')
+
+// Browser pool
+const POOL_SIZE = parseInt(process.env.POOL_SIZE || '4')
+
+const browserPool = {
+  browsers: [],
+  available: [],
+  queue: [],
+
+  async init() {
+    console.log(`브라우저 풀 초기화 중... (${POOL_SIZE}개)`)
+    for (let i = 0; i < POOL_SIZE; i++) {
+      const browser = await this._launch()
+      this.browsers.push(browser)
+      this.available.push(browser)
+    }
+    console.log('브라우저 풀 준비 완료')
+  },
+
+  _launch() {
+    return chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    })
+  },
+
+  acquire() {
+    return new Promise(resolve => {
+      if (this.available.length > 0) {
+        resolve(this.available.pop())
+      } else {
+        this.queue.push(resolve)
+      }
+    })
+  },
+
+  async release(browser, crashed = false) {
+    let next = browser
+    if (crashed) {
+      this.browsers = this.browsers.filter(b => b !== browser)
+      try { await browser.close() } catch {}
+      next = await this._launch()
+      this.browsers.push(next)
+    }
+    if (this.queue.length > 0) {
+      this.queue.shift()(next)
+    } else {
+      this.available.push(next)
+    }
+  },
+}
 
 const app = express()
 app.use(express.json())
@@ -84,21 +132,130 @@ app.post('/blog-counts', async (req, res) => {
   }
 })
 
+async function scrapePost(context, link) {
+  const page = await context.newPage()
+  try {
+    await page.goto(link.href, { waitUntil: 'domcontentloaded', timeout: 15000 })
+
+    try {
+      await page.waitForSelector('iframe#mainFrame, .se-main-container, #postViewArea', { timeout: 4000 })
+    } catch {
+      await page.waitForTimeout(1500)
+    }
+
+    const iframeSrc = await page.evaluate(() => {
+      const iframe = document.querySelector('iframe#mainFrame')
+      return iframe ? iframe.src : null
+    })
+
+    if (iframeSrc) {
+      await page.goto(iframeSrc, { waitUntil: 'domcontentloaded', timeout: 15000 })
+      try {
+        await page.waitForSelector('.se-main-container, #postViewArea, .post-view', { timeout: 4000 })
+      } catch {
+        await page.waitForTimeout(1500)
+      }
+    }
+
+    const postData = await page.evaluate(() => {
+      const selectors = ['.se-main-container', '#postViewArea', '.post-view', '.blog_body']
+      let content = null
+      for (const sel of selectors) {
+        content = document.querySelector(sel)
+        if (content) break
+      }
+      if (!content) content = document.body
+
+      const text = content.innerText || ''
+
+      let imageEls = Array.from(content.querySelectorAll(
+        '.se-component.se-image img, .se-imageStrip img'
+      ))
+      if (imageEls.length === 0) {
+        imageEls = Array.from(content.querySelectorAll('img')).filter(img => {
+          const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || ''
+          return /postfiles\.pstatic\.net|blogfiles\.naver\.net/i.test(src) &&
+                 !/icon|emoji|sticker|emoticon|profile/i.test(src)
+        })
+      }
+      const uniqueSrcs = new Set(imageEls.map(img =>
+        img.getAttribute('data-lazy-src') || img.getAttribute('data-src') || img.src || ''
+      ).filter(Boolean))
+
+      const headingEls = Array.from(content.querySelectorAll([
+        '.se-component.se-heading',
+        '.se-l-heading1', '.se-l-heading2', '.se-l-heading3',
+        '.se-heading2', '.se-heading3',
+        '.htitle', '.pcol2',
+        'h2', 'h3',
+      ].join(', ')))
+      let headingTexts = headingEls.map(el => el.textContent?.trim()).filter(t => t && t.length > 0)
+
+      if (headingTexts.length === 0) {
+        const numbered = (text.match(/(?:^|\n)[ \t]*(\d+\.\s+[^\n]{2,40})/gm) || [])
+          .map(m => m.trim()).filter(Boolean)
+        headingTexts = numbered
+      }
+
+      const hashEls = Array.from(content.querySelectorAll(
+        '.se-component.se-hash .se-hash-item a, .se-hashtag a, .se-hash-link'
+      ))
+      let hashtags = hashEls
+        .map(el => el.textContent?.trim().replace(/^#/, '').trim())
+        .filter(t => t && t.length >= 2)
+      if (hashtags.length === 0) {
+        const hashMatches = text.match(/#([가-힣a-zA-Z0-9_]{2,20})/g) || []
+        hashtags = hashMatches.map(h => h.replace(/^#/, ''))
+      }
+      hashtags = [...new Set(hashtags.flatMap(t => t.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean)))]
+
+      return {
+        charCount: text.replace(/\s/g, '').length,
+        imageCount: uniqueSrcs.size,
+        headingCount: headingTexts.length,
+        headingTexts: headingTexts.slice(0, 10),
+        hashtags,
+        fullText: text,
+        preview: text.slice(0, 300).trim()
+      }
+    })
+
+    postData.hashtags = cleanHashtags(postData.hashtags || [])
+    console.log(`완료: ${link.href.slice(0, 60)} | 글자:${postData.charCount} 이미지:${postData.imageCount}`)
+    return { title: link.title, url: link.href, type: link.type, blockName: link.blockName, ...postData }
+  } catch (e) {
+    console.log('포스트 실패:', e.message)
+    return { title: link.title, url: link.href, type: link.type, blockName: link.blockName, error: e.message }
+  } finally {
+    await page.close()
+  }
+}
+
 app.get('/analyze-top-posts', async (req, res) => {
   const keyword = req.query.keyword
   if (!keyword) return res.json({ error: '키워드 없음' })
 
-  let browser
+  const browser = await browserPool.acquire()
+  let context
+  let crashed = false
+
   try {
-    browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] })
-    const context = await browser.newContext({
+    context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       locale: 'ko-KR',
     })
     const page = await context.newPage()
 
-    await page.goto(`https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(keyword)}`, { waitUntil: 'domcontentloaded', timeout: 15000 })
-    await page.waitForTimeout(3000)
+    await page.goto(
+      `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(keyword)}`,
+      { waitUntil: 'domcontentloaded', timeout: 15000 }
+    )
+
+    try {
+      await page.waitForSelector('h2.sds-comps-text, #main_pack', { timeout: 5000 })
+    } catch {
+      await page.waitForTimeout(2000)
+    }
 
     const searchData = await page.evaluate(() => {
       const results = { smartBlocks: [], regularLinks: [] }
@@ -163,9 +320,9 @@ app.get('/analyze-top-posts', async (req, res) => {
       return results
     })
 
+    await page.close()
     console.log('스마트블록:', searchData.smartBlocks.map(b => `${b.blockName}(${b.links.length}개)`))
 
-    // 제목은 9개 전부 수집
     const allTitles = []
     searchData.smartBlocks.forEach(block => {
       block.links.forEach(link => {
@@ -173,118 +330,24 @@ app.get('/analyze-top-posts', async (req, res) => {
       })
     })
 
-    // 본문은 스마트블록별 대표 글 1개씩만 (총 3개)
-    const representativeLinks = searchData.smartBlocks.map(block => ({
-      ...block.links[0],
-      blockName: block.blockName
-    })).filter(link => link && link.href)
+    const representativeLinks = searchData.smartBlocks
+      .map(block => ({ ...block.links[0], blockName: block.blockName }))
+      .filter(link => link && link.href)
 
-    const posts = []
-    for (const link of representativeLinks) {
-      if (!link.href) continue
-      try {
-        await page.goto(link.href, { waitUntil: 'domcontentloaded', timeout: 15000 })
-        await page.waitForTimeout(3000)
+    // 병렬 크롤링
+    const posts = await Promise.all(representativeLinks.map(link => scrapePost(context, link)))
+    const validPosts = posts.filter(p => !p.error)
 
-        const iframeSrc = await page.evaluate(() => {
-          const iframe = document.querySelector('iframe#mainFrame')
-          return iframe ? iframe.src : null
-        })
+    await context.close()
 
-        if (iframeSrc) {
-          await page.goto(iframeSrc, { waitUntil: 'domcontentloaded', timeout: 15000 })
-          await page.waitForTimeout(2000)
-        }
-
-        const postData = await page.evaluate(() => {
-          const selectors = ['.se-main-container', '#postViewArea', '.post-view', '.blog_body']
-          let content = null
-          for (const sel of selectors) {
-            content = document.querySelector(sel)
-            if (content) break
-          }
-          if (!content) content = document.body
-
-          const text = content.innerText || ''
-          // SE3 본문 이미지만 카운트 (가장 정확)
-          let imageEls = Array.from(content.querySelectorAll(
-            '.se-component.se-image img, .se-imageStrip img'
-          ))
-          // SE3 선택자가 없으면 postfiles CDN URL 기준 fallback
-          if (imageEls.length === 0) {
-            imageEls = Array.from(content.querySelectorAll('img')).filter(img => {
-              const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || ''
-              return /postfiles\.pstatic\.net|blogfiles\.naver\.net/i.test(src) &&
-                     !/icon|emoji|sticker|emoticon|profile/i.test(src)
-            })
-          }
-          // 중복 src 제거
-          const uniqueSrcs = new Set(imageEls.map(img =>
-            img.getAttribute('data-lazy-src') || img.getAttribute('data-src') || img.src || ''
-          ).filter(Boolean))
-          const images = { length: uniqueSrcs.size }
-          // 소제목 추출: CSS 헤딩 우선, 없으면 숫자형(1. 제목) 패턴 fallback
-          const headingEls = Array.from(content.querySelectorAll([
-            '.se-component.se-heading',
-            '.se-l-heading1', '.se-l-heading2', '.se-l-heading3',
-            '.se-heading2', '.se-heading3',
-            '.htitle', '.pcol2',
-            'h2', 'h3',
-          ].join(', ')))
-          let headingTexts = headingEls.map(el => el.textContent?.trim()).filter(t => t && t.length > 0)
-
-          if (headingTexts.length === 0) {
-            // 숫자형 소제목 패턴 추출: "1. 외관", "2. 메뉴" 등
-            const numbered = (text.match(/(?:^|\n)[ \t]*(\d+\.\s+[^\n]{2,40})/gm) || [])
-              .map(m => m.trim()).filter(Boolean)
-            headingTexts = numbered
-          }
-          const headings = { length: headingTexts.length }
-
-          // 해시태그 추출 (SE3 셀렉터 우선, fallback 정규식)
-          const hashEls = Array.from(content.querySelectorAll(
-            '.se-component.se-hash .se-hash-item a, .se-hashtag a, .se-hash-link'
-          ))
-          let hashtags = hashEls
-            .map(el => el.textContent?.trim().replace(/^#/, '').trim())
-            .filter(t => t && t.length >= 2)
-          if (hashtags.length === 0) {
-            const hashMatches = text.match(/#([가-힣a-zA-Z0-9_]{2,20})/g) || []
-            hashtags = hashMatches.map(h => h.replace(/^#/, ''))
-          }
-          hashtags = [...new Set(hashtags.flatMap(t => t.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean)))]
-
-          return {
-            charCount: text.replace(/\s/g, '').length,
-            imageCount: images.length,
-            headingCount: headings.length,
-            headingTexts: headingTexts.slice(0, 10),
-            hashtags,
-            fullText: text,
-            preview: text.slice(0, 300).trim()
-          }
-        })
-
-        // 해시태그 후처리: 조사 제거 + 의미없는 단어 필터
-        postData.hashtags = cleanHashtags(postData.hashtags || [])
-        posts.push({ title: link.title, url: link.href, type: link.type, blockName: link.blockName, ...postData })
-        console.log(`완료: ${link.href.slice(0, 60)} | 글자:${postData.charCount} 이미지:${postData.imageCount}`)
-      } catch (e) {
-        console.log('실패:', e.message)
-      }
-    }
-
-    await browser.close()
-
-    const average = posts.length > 0 ? {
-      charCount: Math.round(posts.reduce((s, p) => s + (p.charCount || 0), 0) / posts.length),
-      imageCount: Math.round(posts.reduce((s, p) => s + (p.imageCount || 0), 0) / posts.length),
-      headingCount: Math.round(posts.reduce((s, p) => s + (p.headingCount || 0), 0) / posts.length),
+    const average = validPosts.length > 0 ? {
+      charCount: Math.round(validPosts.reduce((s, p) => s + (p.charCount || 0), 0) / validPosts.length),
+      imageCount: Math.round(validPosts.reduce((s, p) => s + (p.imageCount || 0), 0) / validPosts.length),
+      headingCount: Math.round(validPosts.reduce((s, p) => s + (p.headingCount || 0), 0) / validPosts.length),
     } : null
 
-    // 해시태그 빈도 집계
     const hashtagFreq = {}
-    posts.forEach(p => {
+    validPosts.forEach(p => {
       (p.hashtags || []).forEach(tag => {
         hashtagFreq[tag] = (hashtagFreq[tag] || 0) + 1
       })
@@ -298,14 +361,16 @@ app.get('/analyze-top-posts', async (req, res) => {
       keyword,
       smartBlocks: searchData.smartBlocks.map(b => b.blockName),
       allTitles,
-      posts,
+      posts: validPosts,
       average,
       topHashtags
     })
-
   } catch (e) {
-    if (browser) await browser.close()
+    crashed = true
+    if (context) try { await context.close() } catch {}
     res.json({ keyword, posts: [], allTitles: [], average: null, error: e.message })
+  } finally {
+    await browserPool.release(browser, crashed)
   }
 })
 
@@ -313,23 +378,28 @@ app.get('/extract-place', async (req, res) => {
   let targetUrl = req.query.url
   if (!targetUrl) return res.json({ error: 'URL 없음' })
 
-  // 플레이스 ID 추출 → pcmap URL로 변환 (더 안정적인 스크래핑)
   const placeIdMatch = targetUrl.match(/place\/(\d+)/)
   if (placeIdMatch) {
     targetUrl = `https://pcmap.place.naver.com/place/${placeIdMatch[1]}/home`
   }
 
-  let browser
+  const browser = await browserPool.acquire()
+  let context
+  let crashed = false
+
   try {
-    browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] })
-    const context = await browser.newContext({
+    context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       locale: 'ko-KR',
     })
     const page = await context.newPage()
 
-    await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 20000 })
-    await page.waitForTimeout(2000)
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
+    try {
+      await page.waitForSelector('span.GHAhO, .zD5Nm span, h2.place_section_header_title', { timeout: 4000 })
+    } catch {
+      await page.waitForTimeout(2000)
+    }
 
     const data = await page.evaluate(() => {
       const getText = (...selectors) => {
@@ -341,12 +411,7 @@ app.get('/extract-place', async (req, res) => {
         return ''
       }
 
-      const name = getText(
-        'span.GHAhO',
-        '.zD5Nm span',
-        '.Fc1rA span',
-        'h2.place_section_header_title',
-      )
+      const name = getText('span.GHAhO', '.zD5Nm span', '.Fc1rA span', 'h2.place_section_header_title')
       const category = getText('span.lnJFt', '.DJJvD', '.category_name')
       const address = getText('span.LDgIH', '.zDTQ span', '.addr span')
       const phone = getText('span.xlx3J', '.fvwqf span', 'a[href^="tel:"]')
@@ -363,7 +428,7 @@ app.get('/extract-place', async (req, res) => {
       return { name, category, address, phone, hours, menuItems }
     })
 
-    await browser.close()
+    await context.close()
 
     if (!data.name) {
       return res.json({ error: '가게 정보를 찾지 못했습니다. 네이버 플레이스 URL인지 확인해주세요.' })
@@ -379,12 +444,20 @@ app.get('/extract-place', async (req, res) => {
 
     res.json({ success: true, ...data, formatted: lines.join('\n') })
   } catch (e) {
-    if (browser) await browser.close()
+    crashed = true
+    if (context) try { await context.close() } catch {}
     res.json({ error: e.message })
+  } finally {
+    await browserPool.release(browser, crashed)
   }
 })
 
-app.get('/health', (req, res) => res.json({ status: 'ok' }))
+app.get('/health', (req, res) => res.json({
+  status: 'ok',
+  pool: { size: POOL_SIZE, available: browserPool.available.length, queued: browserPool.queue.length }
+}))
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => console.log(`Crawler running on port ${PORT}`))
+browserPool.init().then(() => {
+  app.listen(PORT, () => console.log(`Crawler running on port ${PORT}`))
+})

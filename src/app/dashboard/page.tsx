@@ -28,6 +28,8 @@ interface InsightResult {
   main: InsightKeywordItem
   related: InsightKeywordItem[]
   autocomplete: InsightKeywordItem[]
+  trendDirection?: { direction: '상승' | '하락' | '유지'; changeRate: number }
+  seasonality?: { peakMonths: number[]; note: string }
 }
 
 interface GoldenKeyword {
@@ -37,6 +39,7 @@ interface GoldenKeyword {
   total_volume: number
   blog_count: number | null
   competition_label: string | null
+  trend_score: number | null
 }
 
 interface KeywordIdea {
@@ -571,8 +574,8 @@ export default function DashboardPage() {
     setError(''); setPlaceError('')
     setCopied(false); setHashtagCopied(false)
     setInsightKeyword(''); setInsightData(null); setInsightError('')
-    setGoldenCategory(''); setGoldenResults([]); setGoldenHasMore(false); setGoldenOffset(0); setGoldenError(''); setExpandedKeyword(null); setIdeasMap({})
-    setTrendCategory(''); setTrendKeywords([]); setTrendError(''); setTrendExpandedKeyword(null); setTrendIdeasMap({})
+    setGoldenCategory(''); setGoldenResults([]); setGoldenHasMore(false); setGoldenOffset(0); setGoldenError(''); setExpandedKeyword(null)
+    setTrendCategory(''); setTrendKeywords([]); setTrendError(''); setTrendExpandedKeyword(null)
     setMode('home')
   }
 
@@ -1368,7 +1371,14 @@ export default function DashboardPage() {
                           onClick={() => toggleKeyword(kw.keyword)}
                           className="border-b border-gray-50 hover:bg-yellow-50 cursor-pointer transition-colors"
                         >
-                          <td className="px-4 py-3 font-medium text-gray-800">{kw.keyword}</td>
+                          <td className="px-4 py-3 font-medium text-gray-800">
+                            <span className="flex items-center gap-1.5">
+                              {kw.keyword}
+                              {(kw.trend_score ?? 0) >= 50 && (
+                                <span className="text-xs bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded-full font-medium">🔥 트렌드</span>
+                              )}
+                            </span>
+                          </td>
                           <td className="px-3 py-3 text-right text-gray-600">{kw.pc_volume.toLocaleString()}</td>
                           <td className="px-3 py-3 text-right text-gray-600">{kw.mobile_volume.toLocaleString()}</td>
                           <td className="px-3 py-3 text-right text-gray-600">{kw.blog_count?.toLocaleString() ?? '-'}</td>
@@ -1621,6 +1631,33 @@ export default function DashboardPage() {
             <button onClick={() => { setInsightKeyword(''); setInsightData(null); setMode('keyword-insight-input') }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold">키워드 인사이트</h2>
             <p className="text-gray-400 text-sm -mt-2">키워드: <span className="text-blue-500 font-medium">{insightKeyword}</span></p>
+
+            {/* 트렌드 방향 + 계절성 */}
+            {(insightData.trendDirection || insightData.seasonality?.note) && (
+              <div className="bg-white rounded-2xl p-4 shadow-sm flex flex-wrap gap-3">
+                {insightData.trendDirection && (
+                  <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-4 py-2.5">
+                    <span className="text-sm font-medium text-gray-700">최근 트렌드</span>
+                    <span className={`text-sm font-bold ${
+                      insightData.trendDirection.direction === '상승' ? 'text-green-500' :
+                      insightData.trendDirection.direction === '하락' ? 'text-red-400' : 'text-gray-500'
+                    }`}>
+                      {insightData.trendDirection.direction === '상승' ? '↑ 상승' :
+                       insightData.trendDirection.direction === '하락' ? '↓ 하락' : '→ 유지'}
+                      {insightData.trendDirection.changeRate !== 0 && (
+                        <span className="text-xs ml-1 font-normal">({insightData.trendDirection.changeRate > 0 ? '+' : ''}{insightData.trendDirection.changeRate}%)</span>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {insightData.seasonality?.note && (
+                  <div className="flex items-center gap-2 bg-yellow-50 rounded-xl px-4 py-2.5">
+                    <span className="text-sm">📅</span>
+                    <span className="text-sm text-yellow-700">{insightData.seasonality.note}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <InsightTable title="📊 메인 키워드" items={[insightData.main]} />
             {insightData.autocomplete.length > 0 && (
