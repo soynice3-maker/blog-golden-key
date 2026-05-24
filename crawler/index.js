@@ -1,3 +1,4 @@
+require('dotenv').config({ path: require('path').join(__dirname, '../.env.local') })
 const { chromium } = require('playwright')
 const express = require('express')
 
@@ -34,6 +35,21 @@ function cleanHashtags(tags) {
   )]
 }
 
+// 간단한 인메모리 캐시: key → { data, expiresAt }
+const crawlCache = new Map()
+const TTL_SHORTENTS = 4 * 60 * 60 * 1000  // 4시간
+const TTL_NEWS      = 1 * 60 * 60 * 1000  // 1시간
+
+function getCached(key) {
+  const entry = crawlCache.get(key)
+  if (!entry) return null
+  if (Date.now() > entry.expiresAt) { crawlCache.delete(key); return null }
+  return entry.data
+}
+function setCached(key, data, ttl) {
+  crawlCache.set(key, { data, expiresAt: Date.now() + ttl })
+}
+
 // Browser pool
 const POOL_SIZE = parseInt(process.env.POOL_SIZE || '4')
 
@@ -43,11 +59,13 @@ const browserPool = {
   queue: [],
 
   async init() {
-    console.log(`브라우저 풀 초기화 중... (${POOL_SIZE}개)`)
+    console.log(`브라우저 풀 초기화 중... (${POOL_SIZE}개) - 잠시 기다려주세요`)
     for (let i = 0; i < POOL_SIZE; i++) {
+      console.log(`  브라우저 ${i + 1}/${POOL_SIZE} 시작 중...`)
       const browser = await this._launch()
       this.browsers.push(browser)
       this.available.push(browser)
+      console.log(`  브라우저 ${i + 1}/${POOL_SIZE} 완료`)
     }
     console.log('브라우저 풀 준비 완료')
   },
@@ -447,6 +465,182 @@ app.get('/extract-place', async (req, res) => {
     crashed = true
     if (context) try { await context.close() } catch {}
     res.json({ error: e.message })
+  } finally {
+    await browserPool.release(browser, crashed)
+  }
+})
+
+app.get('/shortents', async (req, res) => {
+  const query = req.query.query
+  if (!query) return res.json({ error: '검색어 없음' })
+
+  const cacheKey = `shortents:${query}`
+  const cached = getCached(cacheKey)
+  if (cached) {
+    console.log(`숏텐츠 캐시 히트 [${query}]`)
+    return res.json(cached)
+  }
+
+  const browser = await browserPool.acquire()
+  let context
+  let crashed = false
+
+  try {
+    context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      locale: 'ko-KR',
+    })
+    const page = await context.newPage()
+
+    // 숏텐츠 카테고리 탭 browse
+    await page.goto(
+      `https://search.naver.com/search.naver?category=${encodeURIComponent(query)}&query=%EC%88%8F%ED%85%90%EC%B8%A0&sm=tab_sht.ctg&ssc=tab.shortents.all`,
+      { waitUntil: 'domcontentloaded', timeout: 15000 }
+    )
+
+    await page.waitForTimeout(3000)
+
+    const titles = await page.evaluate(() => {
+      const seen = new Set()
+      const result = []
+
+      const isValidTitle = (t) => {
+        if (!t || t.length < 8 || t.length > 42) return false
+        if (!(/[가-힣]{2,}/.test(t))) return false
+        // 타임스탬프 ("12시간 전", "3일 전" 등)
+        if (/^\d+[시일주분]간?\s*전$/.test(t)) return false
+        // 종합 카테고리명
+        if (/종합$/.test(t)) return false
+        // UI 요소
+        if (/^(Keep에|내정보|바로가기|로그인|회원가입|저장하기|더보기|접기)/.test(t)) return false
+        // 설명문 특징: →, 말줄임, [주석], (주석) 포함
+        if (/→|\.{2,}|\[.+\]$|\(.+\)$/.test(t)) return false
+        return true
+      }
+
+      const tryAdd = (text) => {
+        const t = (text || '').replace(/\s+/g, ' ').trim()
+        if (isValidTitle(t) && !seen.has(t)) {
+          seen.add(t)
+          result.push(t)
+        }
+      }
+
+      const main = document.querySelector('#main_pack') || document.body
+
+      // 1순위: shortents 토픽 카드 제목 (🔍 아이콘과 함께 뜨는 주제 카드)
+      const topicSelectors = [
+        '[class*="shortents"] [class*="title"]',
+        '[class*="clip"] [class*="title"]',
+        '[class*="issue"] [class*="title"]',
+        '[class*="topic"] [class*="title"]',
+        '[class*="sds-comps-text"]',
+      ]
+      for (const sel of topicSelectors) {
+        main.querySelectorAll(sel).forEach(el => {
+          if (!el.querySelector('[class*="title"]')) tryAdd(el.textContent)
+        })
+      }
+
+      // 2순위: a[title] 속성
+      if (result.length < 3) {
+        main.querySelectorAll('a[title]').forEach(el => tryAdd(el.getAttribute('title')))
+      }
+
+      // 3순위: h2/h3 내 텍스트
+      if (result.length < 3) {
+        main.querySelectorAll('h2, h3').forEach(el => tryAdd(el.textContent))
+      }
+
+      // 비슷한 제목 중복 제거 (카드 주제 제목 + 블로그 포스트 제목 쌍 제거)
+      const deduped = []
+      const dedupedWordSets = []
+      for (const t of result) {
+        const words = new Set(
+          t.replace(/[,!?❣️·\[\]]/g, '').split(/\s+/).filter(w => /[가-힣]{2,}/.test(w))
+        )
+        let tooSimilar = false
+        for (const existing of dedupedWordSets) {
+          const overlap = [...words].filter(w => existing.has(w)).length
+          if (overlap >= 2 && overlap / Math.min(words.size, existing.size) >= 0.4) {
+            tooSimilar = true
+            break
+          }
+        }
+        if (!tooSimilar) {
+          deduped.push(t)
+          dedupedWordSets.push(words)
+        }
+      }
+
+      return deduped.slice(0, 10)
+    })
+
+    await context.close()
+    console.log(`숏텐츠 [${query}]: ${titles.length}개 (캐시 저장 4h)`)
+    const result = { query, titles }
+    setCached(cacheKey, result, TTL_SHORTENTS)
+    res.json(result)
+  } catch (e) {
+    crashed = true
+    if (context) try { await context.close() } catch {}
+    res.json({ query, titles: [], error: e.message })
+  } finally {
+    await browserPool.release(browser, crashed)
+  }
+})
+
+app.get('/news-ranking', async (req, res) => {
+  const cached = getCached('news-ranking')
+  if (cached) {
+    console.log('뉴스랭킹 캐시 히트')
+    return res.json(cached)
+  }
+
+  const browser = await browserPool.acquire()
+  let context
+  let crashed = false
+
+  try {
+    context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      locale: 'ko-KR',
+    })
+    const page = await context.newPage()
+
+    await page.goto(
+      'https://news.naver.com/main/ranking/popularDay.naver',
+      { waitUntil: 'domcontentloaded', timeout: 15000 }
+    )
+    await page.waitForTimeout(2000)
+
+    const items = await page.evaluate(() => {
+      const seen = new Set()
+      const result = []
+
+      // 뉴스 기사 링크 (news.naver.com/article 또는 n.news.naver.com/article)
+      document.querySelectorAll('a').forEach(a => {
+        if (!/news\.naver\.com\/article|n\.news\.naver\.com\/article/.test(a.href)) return
+        const title = (a.textContent || a.getAttribute('title') || '')
+          .replace(/\s+/g, ' ').trim()
+        if (title.length >= 8 && title.length <= 80 && /[가-힣]/.test(title) && !seen.has(title)) {
+          seen.add(title)
+          result.push(title)
+        }
+      })
+
+      return result.slice(0, 30)
+    })
+
+    await context.close()
+    console.log(`뉴스랭킹: ${items.length}개 (캐시 저장 1h)`)
+    const result = { items, fetchedAt: new Date().toISOString() }
+    setCached('news-ranking', result, TTL_NEWS)
+    res.json(result)
+  } catch (e) {
+    crashed = true
+    if (context) try { await context.close() } catch {}
+    res.json({ items: [], error: e.message })
   } finally {
     await browserPool.release(browser, crashed)
   }
