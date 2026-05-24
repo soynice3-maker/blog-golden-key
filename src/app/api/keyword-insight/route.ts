@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
         const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월']
         seasonality = {
           peakMonths: months,
-          note: months.length > 0 ? `${months.map(m => monthNames[m-1]).join(', ')}에 검색량이 높아요` : ''
+          note: months.length > 0 ? `${months.map((m: number) => monthNames[m-1]).join(', ')}에 검색량이 높아요` : ''
         }
       }
     } else {
