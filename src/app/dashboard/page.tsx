@@ -1746,9 +1746,9 @@ export default function DashboardPage() {
                             </div>
                             <div className="flex-1 flex items-center justify-center gap-1.5">
                               <span className="text-xs text-gray-500 font-medium">{Math.round(kw.ratio)}</span>
-                              {kw.ratio >= 80 && <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-medium">🔥 핫해요</span>}
-                              {kw.ratio >= 60 && kw.ratio < 80 && <span className="text-xs bg-orange-50 text-orange-500 px-2 py-0.5 rounded-full font-medium">⬆️ 상승 중</span>}
-                              {kw.ratio >= 40 && kw.ratio < 60 && <span className="text-xs bg-blue-50 text-blue-400 px-2 py-0.5 rounded-full font-medium">→ 보통</span>}
+                              {kw.ratio >= 80 && <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-medium">핫해요</span>}
+                              {kw.ratio >= 60 && kw.ratio < 80 && <span className="text-xs bg-orange-50 text-orange-500 px-2 py-0.5 rounded-full font-medium">상승 중</span>}
+                              {kw.ratio < 60 && <span className="text-xs bg-blue-50 text-blue-400 px-2 py-0.5 rounded-full font-medium">보통</span>}
                             </div>
                             <div className="flex-1 flex justify-end">
                               <button
