@@ -1664,7 +1664,7 @@ export default function DashboardPage() {
                 <button
                   key={cat.id}
                   onClick={() => startGolden(cat.id)}
-                  className="bg-white border-2 border-gray-100 hover:border-yellow-400 p-4 rounded-2xl text-left transition-all group"
+                  className="bg-white border-2 border-gray-100 hover:border-yellow-400 p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
                 >
                   <cat.icon className={`w-6 h-6 mb-2 ${cat.color} group-hover:text-yellow-500`} />
                   <p className="font-medium text-sm group-hover:text-yellow-500">{cat.label}</p>
@@ -1875,7 +1875,7 @@ export default function DashboardPage() {
                 <button
                   key={cat.id}
                   onClick={() => startTrend(cat.id)}
-                  className="bg-white border-2 border-gray-100 hover:border-green-400 p-4 rounded-2xl text-left transition-all group"
+                  className="bg-white border-2 border-gray-100 hover:border-green-400 p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
                 >
                   <cat.icon className={`w-6 h-6 mb-2 ${cat.color} group-hover:text-green-500`} />
                   <p className="font-medium text-sm group-hover:text-green-500">{cat.label}</p>
@@ -1939,7 +1939,7 @@ export default function DashboardPage() {
                 {issueError && <p className="text-red-500 text-sm">{issueError}</p>}
                 {issueTitles.length > 0 ? (
                   <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                    <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-center">
                       <span className="text-xs font-medium text-gray-400">이슈</span>
                     </div>
                     <ul className="divide-y divide-gray-50">
@@ -1947,7 +1947,7 @@ export default function DashboardPage() {
                         <li key={i}>
                           <div className="px-4 py-3 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-xs text-gray-300 font-medium shrink-0">#{i + 1}</span>
+                              <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
                               <span className="text-sm text-gray-700 leading-snug">{title}</span>
                             </div>
                             <button
@@ -1993,7 +1993,7 @@ export default function DashboardPage() {
                 ) : (
                   <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                     <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center">
-                      <span className="flex-1 text-xs font-medium text-gray-400">키워드</span>
+                      <span className="flex-1 text-xs font-medium text-gray-400 text-center">키워드</span>
                       <span className="flex-1 text-xs font-medium text-gray-400 text-center">트렌드 지수</span>
                       <span className="flex-1"></span>
                     </div>
@@ -2005,7 +2005,7 @@ export default function DashboardPage() {
                             onClick={() => toggleTrendKeyword(kw.keyword)}
                           >
                             <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <span className="text-xs text-gray-300 font-medium shrink-0">#{i + 1}</span>
+                              <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
                               <span className="text-sm text-gray-700 font-medium truncate">{kw.keyword}</span>
                             </div>
                             <div className="flex-1 flex items-center justify-center gap-1.5">
@@ -2117,7 +2117,7 @@ export default function DashboardPage() {
                     <li key={i}>
                       <div className="px-4 py-3 flex items-start justify-between gap-3">
                         <div className="flex items-start gap-2 min-w-0">
-                          <span className="text-xs text-red-400 font-medium shrink-0 mt-0.5">#{i + 1}</span>
+                          <span className="text-xs text-red-400 font-medium shrink-0 mt-0.5">#{String(i + 1).padStart(2, '0')}</span>
                           <span className="text-sm text-gray-700 leading-snug">{item}</span>
                         </div>
                         <button
