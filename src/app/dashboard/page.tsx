@@ -70,24 +70,24 @@ interface ShortentsIdea {
 }
 
 
-const CATEGORIES: { id: string; label: string; icon: LucideIcon }[] = [
-  { id: 'travel', label: '여행', icon: Plane },
-  { id: 'fashion', label: '패션', icon: Shirt },
-  { id: 'beauty', label: '뷰티', icon: Sparkles },
-  { id: 'food', label: '푸드', icon: Utensils },
-  { id: 'tech_it', label: 'IT테크', icon: Monitor },
-  { id: 'auto', label: '자동차', icon: Car },
-  { id: 'living', label: '리빙', icon: Home },
-  { id: 'parenting', label: '육아', icon: Baby },
-  { id: 'health', label: '생활건강', icon: Heart },
-  { id: 'game', label: '게임', icon: Gamepad2 },
-  { id: 'pet', label: '동물·펫', icon: PawPrint },
-  { id: 'sports', label: '운동·레저', icon: Dumbbell },
-  { id: 'entertain', label: '방송·연예', icon: Tv },
-  { id: 'movie', label: '영화', icon: Film },
-  { id: 'book', label: '도서', icon: BookOpen },
-  { id: 'business', label: '경제·비즈니스', icon: Briefcase },
-  { id: 'education', label: '어학·교육', icon: GraduationCap },
+const CATEGORIES: { id: string; label: string; icon: LucideIcon; color: string }[] = [
+  { id: 'travel', label: '여행', icon: Plane, color: 'text-sky-400' },
+  { id: 'fashion', label: '패션', icon: Shirt, color: 'text-pink-400' },
+  { id: 'beauty', label: '뷰티', icon: Sparkles, color: 'text-rose-400' },
+  { id: 'food', label: '푸드', icon: Utensils, color: 'text-orange-400' },
+  { id: 'tech_it', label: 'IT테크', icon: Monitor, color: 'text-blue-400' },
+  { id: 'auto', label: '자동차', icon: Car, color: 'text-slate-500' },
+  { id: 'living', label: '리빙', icon: Home, color: 'text-amber-500' },
+  { id: 'parenting', label: '육아', icon: Baby, color: 'text-purple-400' },
+  { id: 'health', label: '생활건강', icon: Heart, color: 'text-red-400' },
+  { id: 'game', label: '게임', icon: Gamepad2, color: 'text-violet-500' },
+  { id: 'pet', label: '동물·펫', icon: PawPrint, color: 'text-amber-400' },
+  { id: 'sports', label: '운동·레저', icon: Dumbbell, color: 'text-green-500' },
+  { id: 'entertain', label: '방송·연예', icon: Tv, color: 'text-indigo-400' },
+  { id: 'movie', label: '영화', icon: Film, color: 'text-gray-600' },
+  { id: 'book', label: '도서', icon: BookOpen, color: 'text-emerald-500' },
+  { id: 'business', label: '경제·비즈니스', icon: Briefcase, color: 'text-blue-600' },
+  { id: 'education', label: '어학·교육', icon: GraduationCap, color: 'text-teal-500' },
 ]
 
 interface CrawlPost {
@@ -1666,7 +1666,7 @@ export default function DashboardPage() {
                   onClick={() => startGolden(cat.id)}
                   className="bg-white border-2 border-gray-100 hover:border-yellow-400 p-4 rounded-2xl text-left transition-all group"
                 >
-                  <cat.icon className="w-6 h-6 mb-2 text-gray-400 group-hover:text-yellow-500" />
+                  <cat.icon className={`w-6 h-6 mb-2 ${cat.color} group-hover:text-yellow-500`} />
                   <p className="font-medium text-sm group-hover:text-yellow-500">{cat.label}</p>
                 </button>
               ))}
@@ -1877,7 +1877,7 @@ export default function DashboardPage() {
                   onClick={() => startTrend(cat.id)}
                   className="bg-white border-2 border-gray-100 hover:border-green-400 p-4 rounded-2xl text-left transition-all group"
                 >
-                  <cat.icon className="w-6 h-6 mb-2 text-gray-400 group-hover:text-green-500" />
+                  <cat.icon className={`w-6 h-6 mb-2 ${cat.color} group-hover:text-green-500`} />
                   <p className="font-medium text-sm group-hover:text-green-500">{cat.label}</p>
                 </button>
               ))}
@@ -2092,7 +2092,7 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold pl-2">실시간 인기 뉴스</h2>
             <p className="text-gray-400 text-sm -mt-2 pl-2">오늘 가장 많이 읽힌 뉴스로 블로그 글감을 만들어보세요</p>
             {newsRankingFetchedAt && (
-              <p className="text-xs text-gray-300 -mt-1">
+              <p className="text-xs text-gray-400 -mt-2 pl-2">
                 {(() => {
                   const d = new Date(newsRankingFetchedAt)
                   const yy = d.getFullYear()
@@ -2100,7 +2100,7 @@ export default function DashboardPage() {
                   const dd = String(d.getDate()).padStart(2, '0')
                   const hh = String(d.getHours()).padStart(2, '0')
                   const min = String(d.getMinutes()).padStart(2, '0')
-                  return `${yy}/${mm}/${dd} ${hh}:${min} 기준`
+                  return `${yy}/${mm}/${dd} ${hh}:00 기준`
                 })()}
               </p>
             )}
