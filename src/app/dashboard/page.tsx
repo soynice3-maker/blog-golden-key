@@ -1138,20 +1138,20 @@ export default function DashboardPage() {
             <p className="text-gray-400 text-sm mb-6 pl-2">키워드를 입력하면 상위노출 패턴을 분석하고 프롬프트를 만들어드려요</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">작성 주제 <span className="text-red-400">*</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">작성 주제 <span className="text-red-400">*</span></label>
                 <input type="text" placeholder="예: 문래 라멘 로라멘 후기" value={topic} onChange={e => setTopic(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 mt-1 pl-3">작성하고 싶은 포스팅 주제를 입력하세요</p>
+                <p className="text-xs text-gray-400 mt-1">작성하고 싶은 포스팅 주제를 입력하세요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">가게·브랜드명 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">가게·브랜드명 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <input type="text" placeholder="예: 몽밀, 로라멘, 스타벅스"
                   value={brandName} onChange={e => setBrandName(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 mt-1 pl-3">입력하면 내 가게·브랜드에 딱 맞는 분석 결과가 나와요</p>
+                <p className="text-xs text-gray-400 mt-1">입력하면 내 가게·브랜드에 딱 맞는 분석 결과가 나와요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">타겟 키워드 <span className="text-red-400">*</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">타겟 키워드 <span className="text-red-400">*</span></label>
                 <div className="w-full px-3 py-2 border border-gray-400 rounded-xl text-sm focus-within:border-blue-400 flex flex-wrap gap-2 min-h-[46px] cursor-text"
                   onClick={() => document.getElementById('keyword-input')?.focus()}>
                   {keywords.map((kw, i) => (
@@ -1170,10 +1170,10 @@ export default function DashboardPage() {
                       className="flex-1 min-w-[120px] outline-none bg-transparent py-1 placeholder:text-gray-300" />
                   )}
                 </div>
-                <p className="text-xs text-gray-400 mt-1 pl-3">최대 3개까지 쉼표(,)로 구분해서 입력하면 상위노출에 가장 유리한 키워드를 자동으로 골라드려요</p>
+                <p className="text-xs text-gray-400 mt-1">최대 3개까지 쉼표(,)로 구분해서 입력하면 상위노출에 가장 유리한 키워드를 자동으로 골라드려요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">서브 키워드 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">서브 키워드 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <div className="w-full px-3 py-2 border border-gray-400 rounded-xl text-sm focus-within:border-blue-400 flex flex-wrap gap-2 min-h-[46px] cursor-text"
                   onClick={() => document.getElementById('sub-keyword-input')?.focus()}>
                   {subKeywords.map((kw, i) => (
@@ -1190,17 +1190,17 @@ export default function DashboardPage() {
                     onKeyDown={handleSubKeywordKeyDown}
                     className="flex-1 min-w-[120px] outline-none bg-transparent py-1 placeholder:text-gray-300" />
                 </div>
-                <p className="text-xs text-gray-400 mt-1 pl-3">함께 노출되길 원하는 키워드를 쉼표(,)로 구분해서 입력하세요</p>
+                <p className="text-xs text-gray-400 mt-1">함께 노출되길 원하는 키워드를 쉼표(,)로 구분해서 입력하세요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">참고사항 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">참고사항 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <textarea placeholder={`예:\n주차가 협소해서 대중교통 이용 추천\n웨이팅이 있지만 회전율이 빨라서 금방 입장 가능\n떡볶이보다 튀김이 더 맛있었음\n혼밥하기 좋은 1인석 있음`}
                   value={notes} onChange={e => setNotes(e.target.value)} rows={5}
                   className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 -mt-0.5 pl-3">포스팅에 담고 싶은 내용이나 경험을 자유롭게 적어주세요</p>
+                <p className="text-xs text-gray-400 -mt-0.5">포스팅에 담고 싶은 내용이나 경험을 자유롭게 적어주세요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">참고 링크 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">참고 링크 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <div className="flex gap-2">
                   <input type="text" placeholder="예: https://map.naver.com/p/... (네이버 플레이스 URL)"
                     value={referenceLink} onChange={e => { setReferenceLink(e.target.value); setPlaceError('') }}
@@ -1211,7 +1211,7 @@ export default function DashboardPage() {
                   </button>
                 </div>
                 {placeError && <p className="text-xs text-red-400 mt-1">{placeError}</p>}
-                {!placeError && <p className="text-xs text-gray-400 mt-1 pl-4">네이버 지도 URL을 붙여넣고 버튼을 누르면 잠시 후 위 참고사항이 자동으로 채워져요</p>}
+                {!placeError && <p className="text-xs text-gray-400 mt-1">네이버 지도 URL을 붙여넣고 버튼을 누르면 잠시 후 위 참고사항이 자동으로 채워져요</p>}
               </div>
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <button onClick={startAnalysis} disabled={!mainKeyword}
