@@ -1974,7 +1974,7 @@ export default function DashboardPage() {
                   <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
                     <Zap className="w-8 h-8 mx-auto mb-3 text-gray-300" />
                     <p className="font-medium mb-1">이 카테고리는 이슈 데이터가 없어요</p>
-                    <p className="text-sm">트렌드 탭에서 DataLab 키워드를 확인해보세요</p>
+                    <p className="text-sm">키워드 탭에서 지금 뜨는 트렌드 키워드를 확인해보세요</p>
                   </div>
                 )}
               </>
