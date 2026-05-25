@@ -2076,7 +2076,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <h2 className="text-xl font-bold mb-2">뉴스 랭킹 불러오는 중</h2>
-            <p className="text-gray-500 text-sm">오늘 가장 많이 읽힌 뉴스를 가져오고 있어요</p>
+            <p className="text-gray-500 text-sm">지금 가장 주목받는 뉴스를 불러오고 있어요</p>
             <div className="flex justify-center gap-1.5 mt-4">
               <div className="w-2 h-2 bg-red-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
               <div className="w-2 h-2 bg-red-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
