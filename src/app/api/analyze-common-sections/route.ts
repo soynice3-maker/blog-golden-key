@@ -1,13 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { createClient } from '@supabase/supabase-js'
 
 const client = new Anthropic()
+
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
+
+const TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7일
 
 export async function POST(request: NextRequest) {
   const { keyword, topic, posts } = await request.json()
 
   if (!posts || posts.length === 0) {
     return NextResponse.json({ sections: [] })
+  }
+
+  const supabase = adminClient()
+
+  // 캐시 확인
+  const { data: cached } = await supabase
+    .from('sections_cache')
+    .select('sections, created_at')
+    .eq('keyword', keyword)
+    .single()
+
+  if (cached) {
+    const ageMs = Date.now() - new Date(cached.created_at).getTime()
+    if (ageMs < TTL_MS) {
+      return NextResponse.json({ sections: cached.sections, fromCache: true })
+    }
   }
 
   const postsText = posts.map((p: { title: string; fullText: string }, i: number) =>
@@ -41,6 +67,11 @@ JSON 배열로만 응답해줘 (다른 설명 없이):
     const text = message.content[0].type === 'text' ? message.content[0].text : ''
     const jsonMatch = text.match(/\[[\s\S]*\]/)
     const sections = jsonMatch ? JSON.parse(jsonMatch[0]) : []
+
+    // 캐시 저장
+    await supabase
+      .from('sections_cache')
+      .upsert({ keyword, sections, created_at: new Date().toISOString() })
 
     return NextResponse.json({ sections })
   } catch (e: any) {

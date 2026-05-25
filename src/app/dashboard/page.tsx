@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { Wand2, BarChart2, Trophy, TrendingUp, Newspaper, Key, Tag, FileText, Smartphone, Link2, Hash, Lightbulb, PenLine, Copy, Flame, RefreshCw, Zap, Search, Calendar, Pencil, Plane, Shirt, Sparkles, Utensils, Monitor, Car, Home, Baby, Heart, Gamepad2, PawPrint, Dumbbell, Tv, Film, BookOpen, Briefcase, GraduationCap, type LucideIcon } from 'lucide-react'
 
 interface KeywordResult {
   keyword: string
@@ -69,24 +70,24 @@ interface ShortentsIdea {
 }
 
 
-const CATEGORIES = [
-  { id: 'travel', label: '여행', emoji: '✈️' },
-  { id: 'fashion', label: '패션', emoji: '👗' },
-  { id: 'beauty', label: '뷰티', emoji: '💄' },
-  { id: 'food', label: '푸드', emoji: '🍜' },
-  { id: 'tech_it', label: 'IT테크', emoji: '💻' },
-  { id: 'auto', label: '자동차', emoji: '🚗' },
-  { id: 'living', label: '리빙', emoji: '🏠' },
-  { id: 'parenting', label: '육아', emoji: '👶' },
-  { id: 'health', label: '생활건강', emoji: '💊' },
-  { id: 'game', label: '게임', emoji: '🎮' },
-  { id: 'pet', label: '동물·펫', emoji: '🐶' },
-  { id: 'sports', label: '운동·레저', emoji: '⚽' },
-  { id: 'entertain', label: '방송·연예', emoji: '🎬' },
-  { id: 'movie', label: '영화', emoji: '🎥' },
-  { id: 'book', label: '도서', emoji: '📚' },
-  { id: 'business', label: '경제·비즈니스', emoji: '💼' },
-  { id: 'education', label: '어학·교육', emoji: '📖' },
+const CATEGORIES: { id: string; label: string; icon: LucideIcon }[] = [
+  { id: 'travel', label: '여행', icon: Plane },
+  { id: 'fashion', label: '패션', icon: Shirt },
+  { id: 'beauty', label: '뷰티', icon: Sparkles },
+  { id: 'food', label: '푸드', icon: Utensils },
+  { id: 'tech_it', label: 'IT테크', icon: Monitor },
+  { id: 'auto', label: '자동차', icon: Car },
+  { id: 'living', label: '리빙', icon: Home },
+  { id: 'parenting', label: '육아', icon: Baby },
+  { id: 'health', label: '생활건강', icon: Heart },
+  { id: 'game', label: '게임', icon: Gamepad2 },
+  { id: 'pet', label: '동물·펫', icon: PawPrint },
+  { id: 'sports', label: '운동·레저', icon: Dumbbell },
+  { id: 'entertain', label: '방송·연예', icon: Tv },
+  { id: 'movie', label: '영화', icon: Film },
+  { id: 'book', label: '도서', icon: BookOpen },
+  { id: 'business', label: '경제·비즈니스', icon: Briefcase },
+  { id: 'education', label: '어학·교육', icon: GraduationCap },
 ]
 
 interface CrawlPost {
@@ -567,6 +568,39 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<'home' | 'write-input' | 'analyzing' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result'>('home')
+  const HERO_TITLES = ['블로그 상위노출, 여기서 시작하세요!', '상위노출, 운이 아니라 전략입니다.']
+  const [typedTitle, setTypedTitle] = useState('')
+  const [titleDone, setTitleDone] = useState(false)
+  useEffect(() => {
+    if (mode !== 'home') return
+    let cancelled = false
+    let phraseIdx = 0
+    const run = async () => {
+      while (!cancelled) {
+        const phrase = HERO_TITLES[phraseIdx % HERO_TITLES.length]
+        // 타이핑
+        for (let i = 1; i <= phrase.length; i++) {
+          if (cancelled) return
+          setTypedTitle(phrase.slice(0, i))
+          setTitleDone(false)
+          await new Promise(r => setTimeout(r, 60))
+        }
+        setTitleDone(true)
+        await new Promise(r => setTimeout(r, 1800))
+        // 지우기
+        for (let i = phrase.length - 1; i >= 0; i--) {
+          if (cancelled) return
+          setTypedTitle(phrase.slice(0, i))
+          setTitleDone(false)
+          await new Promise(r => setTimeout(r, 30))
+        }
+        await new Promise(r => setTimeout(r, 300))
+        phraseIdx++
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [mode])
 
   const [topic, setTopic] = useState('')
   const [brandName, setBrandName] = useState('')
@@ -1046,7 +1080,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-        <div className="font-bold text-lg cursor-pointer" onClick={resetAll}>블로그황금키 🔑</div>
+        <div className="font-bold text-lg cursor-pointer flex items-center gap-1.5" onClick={resetAll}>블로그황금키 <Key className="w-4 h-4 text-yellow-400" /></div>
         <div className="flex items-center gap-4 text-sm">
           <span className="text-gray-500">{user?.email}</span>
           <a href="/mypage" className="text-gray-400 hover:text-gray-600">마이페이지</a>
@@ -1059,32 +1093,38 @@ export default function DashboardPage() {
         {/* ── home ── */}
         {mode === 'home' && (
           <>
-            <h2 className="text-xl font-bold mb-2">지금 어떤 글 쓸까요?</h2>
-            <p className="text-gray-400 text-sm mb-8">키워드를 입력하면 상위노출 패턴을 분석하고 프롬프트를 만들어드려요</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-              <button onClick={() => setMode('write-input')} className="bg-white border-2 border-gray-100 hover:border-blue-400 p-6 rounded-2xl text-left transition-all group">
-                <div className="text-2xl mb-3">🔍</div>
-                <h3 className="font-bold mb-1 group-hover:text-blue-500">키워드 분석 + 프롬프트 생성</h3>
-                <p className="text-gray-400 text-sm">상위노출 패턴 분석 후 Claude/GPT 프롬프트 자동 생성</p>
+            <h2 className="text-3xl font-extrabold mb-2 text-center">
+              {typedTitle}
+              {!titleDone && <span className="inline-block w-0.5 h-7 bg-gray-800 align-middle ml-0.5 animate-pulse" />}
+            </h2>
+            <p className="text-gray-400 text-sm mb-8 text-center">키워드만 입력하면 상위노출에 최적화된 글을 바로 쓸 수 있어요</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <button onClick={() => setMode('write-input')} className="bg-white border-2 border-gray-100 hover:border-blue-400 p-6 rounded-2xl text-left transition-all duration-200 group hover:-translate-y-1 hover:shadow-lg hover:bg-blue-50 flex flex-col">
+                <Wand2 className="w-7 h-7 text-blue-400 group-hover:text-blue-500 mb-4" />
+                <h3 className="font-bold mb-1.5 group-hover:text-blue-500">글쓰기 프롬프트 자동 생성</h3>
+                <p className="text-gray-400 text-sm leading-snug">키워드에 맞는 최적화 프롬프트를 바로 만들어드려요</p>
               </button>
-              <button onClick={() => setMode('keyword-insight-input')} className="bg-white border-2 border-gray-100 hover:border-blue-400 p-6 rounded-2xl text-left transition-all group">
-                <div className="text-2xl mb-3">📊</div>
-                <h3 className="font-bold mb-1 group-hover:text-blue-500">키워드 인사이트</h3>
-                <p className="text-gray-400 text-sm">검색량·블로그수·경쟁강도 한눈에 비교</p>
+              <button onClick={() => setMode('keyword-insight-input')} className="bg-white border-2 border-gray-100 hover:border-blue-400 p-6 rounded-2xl text-left transition-all duration-200 group hover:-translate-y-1 hover:shadow-lg hover:bg-blue-50 flex flex-col">
+                <BarChart2 className="w-7 h-7 text-blue-400 group-hover:text-blue-500 mb-4" />
+                <h3 className="font-bold mb-1.5 group-hover:text-blue-500">키워드 인사이트</h3>
+                <p className="text-gray-400 text-sm leading-snug">검색량·블로그수·경쟁강도를 한눈에 비교하고 최적의 키워드를 찾아보세요</p>
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <button onClick={() => setMode('golden-category')} className="bg-white border-2 border-gray-100 hover:border-yellow-400 p-5 rounded-2xl text-left transition-all group">
-                <h3 className="font-bold text-sm mb-3 group-hover:text-yellow-500">🥇 황금키워드 발굴</h3>
-                <p className="text-gray-400 text-sm">경쟁 적고 검색량 좋은 키워드 추천</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <button onClick={() => setMode('golden-category')} className="bg-white border-2 border-gray-100 hover:border-yellow-400 p-5 rounded-2xl text-left transition-all duration-200 group hover:-translate-y-1 hover:shadow-lg hover:bg-yellow-50 flex flex-col">
+                <Trophy className="w-6 h-6 text-yellow-400 group-hover:text-yellow-500 mb-4" />
+                <h3 className="font-bold text-sm mb-1 group-hover:text-yellow-500">황금키워드 발굴</h3>
+                <p className="text-gray-400 text-xs leading-snug">검색량은 높고 경쟁은 낮은 키워드를 골라드려요</p>
               </button>
-              <button onClick={() => setMode('trend-category')} className="bg-white border-2 border-gray-100 hover:border-green-400 p-5 rounded-2xl text-left transition-all group">
-                <h3 className="font-bold text-sm mb-3 group-hover:text-green-500">🔥 트렌드·이슈 글감</h3>
-                <p className="text-gray-400 text-sm">지금 뜨는 트렌드와 이슈로 글감 발굴</p>
+              <button onClick={() => setMode('trend-category')} className="bg-white border-2 border-gray-100 hover:border-green-400 p-5 rounded-2xl text-left transition-all duration-200 group hover:-translate-y-1 hover:shadow-lg hover:bg-green-50 flex flex-col">
+                <TrendingUp className="w-6 h-6 text-green-400 group-hover:text-green-500 mb-4" />
+                <h3 className="font-bold text-sm mb-1 group-hover:text-green-500">트렌드·이슈 글감</h3>
+                <p className="text-gray-400 text-xs leading-snug">지금 가장 핫한 이슈로 글감을 바로 찾아드려요</p>
               </button>
-              <button onClick={startNewsRanking} className="bg-white border-2 border-gray-100 hover:border-red-400 p-5 rounded-2xl text-left transition-all group">
-                <h3 className="font-bold text-sm mb-3 group-hover:text-red-500">📰 실시간 인기 뉴스</h3>
-                <p className="text-gray-400 text-sm">지금 가장 많이 읽힌 뉴스로 글감 발굴</p>
+              <button onClick={startNewsRanking} className="bg-white border-2 border-gray-100 hover:border-red-400 p-5 rounded-2xl text-left transition-all duration-200 group hover:-translate-y-1 hover:shadow-lg hover:bg-red-50 flex flex-col">
+                <Newspaper className="w-6 h-6 text-red-400 group-hover:text-red-500 mb-4" />
+                <h3 className="font-bold text-sm mb-1 group-hover:text-red-500">실시간 인기 뉴스</h3>
+                <p className="text-gray-400 text-xs leading-snug">지금 가장 주목받는 뉴스로 글 아이디어를 얻어보세요</p>
               </button>
             </div>
           </>
@@ -1094,24 +1134,24 @@ export default function DashboardPage() {
         {mode === 'write-input' && (
           <div>
             <button onClick={resetAll} className="text-gray-400 text-sm mb-6 hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold mb-2">키워드 분석</h2>
-            <p className="text-gray-400 text-sm mb-6">키워드를 입력하면 상위노출 패턴을 분석하고 프롬프트를 만들어드려요</p>
+            <h2 className="text-xl font-bold mb-2 pl-2">키워드 분석</h2>
+            <p className="text-gray-400 text-sm mb-6 pl-2">키워드를 입력하면 상위노출 패턴을 분석하고 프롬프트를 만들어드려요</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">작성 주제 <span className="text-red-400">*</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">작성 주제 <span className="text-red-400">*</span></label>
                 <input type="text" placeholder="예: 문래 라멘 로라멘 후기" value={topic} onChange={e => setTopic(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 mt-1 pl-4">작성하고 싶은 포스팅 주제를 입력하세요</p>
+                <p className="text-xs text-gray-400 mt-1 pl-3">작성하고 싶은 포스팅 주제를 입력하세요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">가게·브랜드명 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">가게·브랜드명 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <input type="text" placeholder="예: 몽밀, 로라멘, 스타벅스"
                   value={brandName} onChange={e => setBrandName(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 mt-1 pl-4">입력하면 내 가게·브랜드에 딱 맞는 분석 결과가 나와요</p>
+                <p className="text-xs text-gray-400 mt-1 pl-3">입력하면 내 가게·브랜드에 딱 맞는 분석 결과가 나와요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">타겟 키워드 <span className="text-red-400">*</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">타겟 키워드 <span className="text-red-400">*</span></label>
                 <div className="w-full px-3 py-2 border border-gray-400 rounded-xl text-sm focus-within:border-blue-400 flex flex-wrap gap-2 min-h-[46px] cursor-text"
                   onClick={() => document.getElementById('keyword-input')?.focus()}>
                   {keywords.map((kw, i) => (
@@ -1133,7 +1173,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-gray-400 mt-1 pl-3">최대 3개까지 쉼표(,)로 구분해서 입력하면 상위노출에 가장 유리한 키워드를 자동으로 골라드려요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">서브 키워드 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">서브 키워드 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <div className="w-full px-3 py-2 border border-gray-400 rounded-xl text-sm focus-within:border-blue-400 flex flex-wrap gap-2 min-h-[46px] cursor-text"
                   onClick={() => document.getElementById('sub-keyword-input')?.focus()}>
                   {subKeywords.map((kw, i) => (
@@ -1153,14 +1193,14 @@ export default function DashboardPage() {
                 <p className="text-xs text-gray-400 mt-1 pl-3">함께 노출되길 원하는 키워드를 쉼표(,)로 구분해서 입력하세요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">참고사항 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">참고사항 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <textarea placeholder={`예:\n주차가 협소해서 대중교통 이용 추천\n웨이팅이 있지만 회전율이 빨라서 금방 입장 가능\n떡볶이보다 튀김이 더 맛있었음\n혼밥하기 좋은 1인석 있음`}
                   value={notes} onChange={e => setNotes(e.target.value)} rows={5}
                   className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 mt-0.5 pl-3">포스팅에 담고 싶은 내용이나 경험을 자유롭게 적어주세요</p>
+                <p className="text-xs text-gray-400 -mt-0.5 pl-3">포스팅에 담고 싶은 내용이나 경험을 자유롭게 적어주세요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">참고 링크 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block pl-3">참고 링크 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <div className="flex gap-2">
                   <input type="text" placeholder="예: https://map.naver.com/p/... (네이버 플레이스 URL)"
                     value={referenceLink} onChange={e => { setReferenceLink(e.target.value); setPlaceError('') }}
@@ -1171,12 +1211,12 @@ export default function DashboardPage() {
                   </button>
                 </div>
                 {placeError && <p className="text-xs text-red-400 mt-1">{placeError}</p>}
-                {!placeError && <p className="text-xs text-gray-400 mt-1 pl-4">버튼을 누르고 잠시만 기다려 주시면 가게 정보가 자동 추출돼요!</p>}
+                {!placeError && <p className="text-xs text-gray-400 mt-1 pl-4">네이버 지도 URL을 붙여넣고 버튼을 누르면 잠시 후 위 참고사항이 자동으로 채워져요</p>}
               </div>
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <button onClick={startAnalysis} disabled={!mainKeyword}
-                className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600 disabled:opacity-50">
-                상위노출 분석 시작 →
+                className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                {!mainKeyword ? '필수 항목을 모두 입력해야 분석을 시작할 수 있어요' : '상위노출 분석 시작 →'}
               </button>
             </div>
           </div>
@@ -1189,7 +1229,7 @@ export default function DashboardPage() {
               <div className="relative w-14 h-14">
                 <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
                 <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center text-xl">🔑</div>
+                <div className="absolute inset-0 flex items-center justify-center"><Key className="w-5 h-5 text-blue-500" /></div>
               </div>
             </div>
             <h2 className="text-xl font-bold mb-2">분석 중이에요</h2>
@@ -1206,8 +1246,8 @@ export default function DashboardPage() {
         {mode === 'supplement-input' && (
           <div className="space-y-4">
             <button onClick={() => setMode('write-input')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold">상위노출 최적화 체크리스트</h2>
-            <p className="text-gray-600 text-sm -mt-2">
+            <h2 className="text-xl font-bold pl-2">상위노출 최적화 체크리스트</h2>
+            <p className="text-gray-600 text-sm -mt-2 pl-2">
               상위노출을 위해 꼭 담아야 할 항목들이에요. <span className="text-blue-500">체크되지 않은 항목에 내용을 입력하면</span> 자동으로 체크돼요. <span className="inline-block bg-blue-100 text-blue-500 text-xs px-2 py-0.5 rounded-full font-medium">선택사항</span>이지만 많이 채울수록 상위 노출 확률이 올라가요.
             </p>
 
@@ -1289,8 +1329,8 @@ export default function DashboardPage() {
         {mode === 'result' && analysis && (
           <div className="space-y-4">
             <button onClick={() => { setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink(''); setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setMode('write-input') }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold">분석 결과</h2>
-            <p className="text-gray-400 text-sm -mt-2">키워드: <span className="text-blue-500 font-medium">{keywordData?.keyword || mainKeyword}</span></p>
+            <h2 className="text-xl font-bold pl-2">분석 결과</h2>
+            <p className="text-gray-400 text-sm -mt-2 pl-2">키워드: <span className="text-blue-500 font-medium">{keywordData?.keyword || mainKeyword}</span></p>
             {autoSelectedKeyword && (
               <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm text-blue-700">
                 <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-500 border-2 border-blue-500 mr-2 align-middle">
@@ -1304,7 +1344,7 @@ export default function DashboardPage() {
             {/* 키워드 통계 */}
             {keywordData && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-800 mb-3">📊 키워드 데이터</p>
+                <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><BarChart2 className="w-3.5 h-3.5" /> 키워드 데이터</p>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-gray-50 rounded-xl p-3 text-center">
                     <p className="text-xs text-gray-500 mb-1">월 검색량</p>
@@ -1324,7 +1364,7 @@ export default function DashboardPage() {
 
             {/* 제목 패턴 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-              <p className="text-xs font-semibold text-gray-800">🏷️ 제목 패턴 분석</p>
+              <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> 제목 패턴 분석</p>
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">평균 제목 길이</p>
@@ -1402,7 +1442,7 @@ export default function DashboardPage() {
 
             {/* 본문 키워드 분석 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-              <p className="text-xs font-semibold text-gray-800">📝 본문 키워드 분석</p>
+              <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> 본문 키워드 분석</p>
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">키워드 평균 노출</p>
@@ -1448,23 +1488,23 @@ export default function DashboardPage() {
 
             {/* 작성 스타일 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <p className="text-xs font-semibold text-gray-800 mb-3">📱 작성 스타일</p>
+              <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5" /> 작성 스타일</p>
               <div className="flex flex-wrap gap-2">
-                <span className={`text-xs px-3 py-1 rounded-full font-medium ${analysis.mobileOptPct >= 50 ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
-                  📱 모바일 최적화 {analysis.mobileOptPct >= 50 ? '권장' : '해당없음'}
+                <span className={`inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium ${analysis.mobileOptPct >= 50 ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                  <Smartphone className="w-3 h-3" /> 모바일 최적화 {analysis.mobileOptPct >= 50 ? '권장' : '해당없음'}
                 </span>
                 {analysis.avgImages > 0 && (
-                  <span className="text-xs bg-green-50 text-green-600 px-3 py-1 rounded-full font-medium">
-                    🖼️ 이미지 평균 {analysis.avgImages}장
+                  <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-600 px-3 py-1 rounded-full font-medium">
+                    <Search className="w-3 h-3" /> 이미지 평균 {analysis.avgImages}장
                   </span>
                 )}
                 {analysis.avgVideos > 0 && (
-                  <span className="text-xs bg-purple-50 text-purple-600 px-3 py-1 rounded-full font-medium">
-                    🎬 영상 평균 {analysis.avgVideos}개
+                  <span className="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-3 py-1 rounded-full font-medium">
+                    <Zap className="w-3 h-3" /> 영상 평균 {analysis.avgVideos}개
                   </span>
                 )}
-                <span className={`text-xs px-3 py-1 rounded-full font-medium ${analysis.avgHeadings > 0 ? 'bg-orange-50 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
-                  📝 소제목 {analysis.avgHeadings > 0 ? `평균 ${analysis.avgHeadings}개 (${analysis.headingNumbered ? '숫자형' : '일반형'})` : '미사용'}
+                <span className={`inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium ${analysis.avgHeadings > 0 ? 'bg-orange-50 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
+                  <FileText className="w-3 h-3" /> 소제목 {analysis.avgHeadings > 0 ? `평균 ${analysis.avgHeadings}개 (${analysis.headingNumbered ? '숫자형' : '일반형'})` : '미사용'}
                 </span>
               </div>
             </div>
@@ -1472,7 +1512,7 @@ export default function DashboardPage() {
             {/* 연관 키워드 */}
             {analysis.relatedKeywords.length > 0 && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-800 mb-3">🔗 연관 키워드 분포 <span className="text-gray-400 font-normal">(본문 빈도 기준)</span></p>
+                <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><Link2 className="w-3.5 h-3.5" /> 연관 키워드 분포 <span className="text-gray-400 font-normal">(본문 빈도 기준)</span></p>
                 <div className="flex flex-wrap gap-2">
                   {analysis.relatedKeywords.map((r, i) => (
                     <span key={i} className={`text-xs px-3 py-1 rounded-full font-medium ${
@@ -1490,7 +1530,7 @@ export default function DashboardPage() {
             {analysis.topHashtags.length > 0 && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-gray-800"># 추천 해시태그</p>
+                  <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> 추천 해시태그</p>
                   <button onClick={copyHashtags}
                     className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
                       hashtagCopied ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1515,7 +1555,7 @@ export default function DashboardPage() {
             {/* 알고리즘 인사이트 */}
             {analysis.insights.length > 0 && (
               <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-                <p className="text-xs font-semibold text-gray-800">💡 알고리즘 인사이트 & 작성 전략</p>
+                <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Lightbulb className="w-3.5 h-3.5" /> 알고리즘 인사이트 & 작성 전략</p>
                 <ul className="space-y-3">
                   {analysis.insights.map((ins, i) => {
                     const sep = ins.includes(' — ') ? ' — ' : ins.includes(' → ') ? ' → ' : null
@@ -1553,7 +1593,7 @@ export default function DashboardPage() {
             {/* 작성 포인트 */}
             {analysis.strategy && (
               <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-                <p className="text-xs font-semibold text-gray-800">✍️ 작성 포인트</p>
+                <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><PenLine className="w-3.5 h-3.5" /> 작성 포인트</p>
 
                 {analysis.strategy.titleStructure.length > 0 && (
                   <div>
@@ -1585,7 +1625,7 @@ export default function DashboardPage() {
 
                 {analysis.relatedKeywords.length > 0 && (
                   <div>
-                    <p className="text-xs text-gray-500 font-medium mb-2">📈 추천 서브 키워드</p>
+                    <p className="text-xs text-gray-500 font-medium mb-2 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> 추천 서브 키워드</p>
                     <div className="flex flex-wrap gap-2">
                       {analysis.relatedKeywords.slice(0, 8).map((r, i) => (
                         <span key={i} className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
@@ -1601,7 +1641,7 @@ export default function DashboardPage() {
             {/* 프롬프트 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold text-gray-800">👇 Claude / ChatGPT에 붙여넣으세요</p>
+                <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Copy className="w-3.5 h-3.5" /> Claude / ChatGPT에 붙여넣으세요</p>
                 <button onClick={copyPrompt}
                   className={`text-sm px-4 py-2 rounded-lg font-medium transition-all ${copied ? 'bg-green-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>
                   {copied ? '복사됨 ✓' : '프롬프트 복사'}
@@ -1617,8 +1657,8 @@ export default function DashboardPage() {
         {mode === 'golden-category' && (
           <div>
             <button onClick={resetAll} className="text-gray-400 text-sm mb-6 hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold mb-2">황금키워드 발굴</h2>
-            <p className="text-gray-400 text-sm mb-6">내 블로그 카테고리를 선택하세요</p>
+            <h2 className="text-xl font-bold mb-2 pl-2">황금키워드 발굴</h2>
+            <p className="text-gray-400 text-sm mb-6 pl-2">내 블로그 카테고리를 선택하세요</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {CATEGORIES.map(cat => (
                 <button
@@ -1626,7 +1666,7 @@ export default function DashboardPage() {
                   onClick={() => startGolden(cat.id)}
                   className="bg-white border-2 border-gray-100 hover:border-yellow-400 p-4 rounded-2xl text-left transition-all group"
                 >
-                  <div className="text-2xl mb-2">{cat.emoji}</div>
+                  <cat.icon className="w-6 h-6 mb-2 text-gray-400 group-hover:text-yellow-500" />
                   <p className="font-medium text-sm group-hover:text-yellow-500">{cat.label}</p>
                 </button>
               ))}
@@ -1641,7 +1681,7 @@ export default function DashboardPage() {
               <div className="relative w-14 h-14">
                 <div className="absolute inset-0 rounded-full border-4 border-yellow-100"></div>
                 <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-yellow-400 animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center text-xl">🥇</div>
+                <div className="absolute inset-0 flex items-center justify-center"><Trophy className="w-5 h-5 text-yellow-400" /></div>
               </div>
             </div>
             <h2 className="text-xl font-bold mb-2">황금키워드 찾는 중</h2>
@@ -1658,10 +1698,11 @@ export default function DashboardPage() {
         {mode === 'golden-result' && (
           <div className="space-y-4">
             <button onClick={() => setMode('golden-category')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold">황금키워드 발굴</h2>
-            <p className="text-gray-400 text-sm -mt-2">
-              카테고리: <span className="text-yellow-500 font-medium">
-                {CATEGORIES.find(c => c.id === goldenCategory)?.emoji} {CATEGORIES.find(c => c.id === goldenCategory)?.label}
+            <h2 className="text-xl font-bold pl-2">황금키워드 발굴</h2>
+            <p className="text-gray-400 text-sm -mt-2 pl-2">
+              카테고리: <span className="text-yellow-500 font-medium inline-flex items-center gap-1">
+                {(() => { const cat = CATEGORIES.find(c => c.id === goldenCategory); return cat ? <cat.icon className="w-3.5 h-3.5" /> : null })()}
+                {CATEGORIES.find(c => c.id === goldenCategory)?.label}
               </span>
             </p>
 
@@ -1669,7 +1710,7 @@ export default function DashboardPage() {
 
             {goldenResults.length === 0 && !goldenError ? (
               <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
-                <p className="text-2xl mb-3">🔄</p>
+                <RefreshCw className="w-8 h-8 mx-auto mb-3 text-gray-300" />
                 <p className="font-medium mb-1">아직 데이터가 준비 중이에요</p>
                 <p className="text-sm">키워드 DB가 구축되는 동안 잠시 기다려주세요 (약 12일 소요)</p>
               </div>
@@ -1697,7 +1738,7 @@ export default function DashboardPage() {
                             <span className="flex items-center gap-1.5">
                               {kw.keyword}
                               {(kw.trend_score ?? 0) >= 50 && (
-                                <span className="text-xs bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded-full font-medium">🔥 트렌드</span>
+                                <span className="inline-flex items-center gap-0.5 text-xs bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded-full font-medium"><Flame className="w-3 h-3" /> 트렌드</span>
                               )}
                             </span>
                           </td>
@@ -1705,10 +1746,11 @@ export default function DashboardPage() {
                           <td className="px-3 py-3 text-right text-gray-600">{kw.mobile_volume.toLocaleString()}</td>
                           <td className="px-3 py-3 text-right text-gray-600">{kw.blog_count?.toLocaleString() ?? '-'}</td>
                           <td className="px-3 py-3 text-center">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
                               kw.competition_label === '매우좋음' ? 'text-green-600 bg-green-50' : 'text-green-700 bg-green-50'
                             }`}>
-                              🟢 {kw.competition_label}
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                              {kw.competition_label}
                             </span>
                           </td>
                         </tr>
@@ -1716,7 +1758,7 @@ export default function DashboardPage() {
                           <tr key={`ideas-${kw.keyword}`} className="bg-yellow-50 border-b border-gray-100">
                             <td colSpan={5} className="px-4 py-4">
                               {ideasMap[kw.keyword] === 'loading' && (
-                                <p className="text-sm text-gray-400">💡 글감 생성 중...</p>
+                                <p className="text-sm text-gray-400 flex items-center gap-1.5"><Lightbulb className="w-4 h-4" /> 글감 생성 중...</p>
                               )}
                               {ideasMap[kw.keyword] === 'error' && (
                                 <p className="text-sm text-red-400">글감 생성에 실패했습니다.</p>
@@ -1724,7 +1766,7 @@ export default function DashboardPage() {
                               {Array.isArray(ideasMap[kw.keyword]) && (
                                 <div className="space-y-3">
                                   <div className="relative inline-block group mb-2">
-                                    <p className="text-xs font-semibold text-gray-600 cursor-default">💡 황금 글감 추천</p>
+                                    <p className="text-xs font-semibold text-gray-600 cursor-default flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5 text-yellow-400" /> 황금 글감 추천</p>
                                     <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover:block z-10 whitespace-nowrap">
                                       <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-1.5 shadow-lg">
                                         상위 노출 가능성이 높은 글감입니다.
@@ -1775,8 +1817,8 @@ export default function DashboardPage() {
         {mode === 'keyword-insight-input' && (
           <div>
             <button onClick={resetAll} className="text-gray-400 text-sm mb-6 hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold mb-2">키워드 인사이트</h2>
-            <p className="text-gray-400 text-sm mb-6">키워드 하나를 입력하면 검색량과 경쟁강도를 분석해드려요 (일 10회)</p>
+            <h2 className="text-xl font-bold mb-2 pl-2">키워드 인사이트</h2>
+            <p className="text-gray-400 text-sm mb-6 pl-2">키워드 하나를 입력하면 검색량과 경쟁강도를 분석해드려요 (일 10회)</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">분석할 키워드</label>
@@ -1809,7 +1851,7 @@ export default function DashboardPage() {
               <div className="relative w-14 h-14">
                 <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
                 <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center text-xl">🔑</div>
+                <div className="absolute inset-0 flex items-center justify-center"><Key className="w-5 h-5 text-blue-500" /></div>
               </div>
             </div>
             <h2 className="text-xl font-bold mb-2">분석 중이에요</h2>
@@ -1826,8 +1868,8 @@ export default function DashboardPage() {
         {mode === 'trend-category' && (
           <div>
             <button onClick={resetAll} className="text-gray-400 text-sm mb-6 hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold mb-2">트렌드·이슈 글감 발굴</h2>
-            <p className="text-gray-400 text-sm mb-6">내 블로그 카테고리를 선택하세요</p>
+            <h2 className="text-xl font-bold mb-2 pl-2">트렌드·이슈 글감 발굴</h2>
+            <p className="text-gray-400 text-sm mb-6 pl-2">내 블로그 카테고리를 선택하세요</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {CATEGORIES.map(cat => (
                 <button
@@ -1835,7 +1877,7 @@ export default function DashboardPage() {
                   onClick={() => startTrend(cat.id)}
                   className="bg-white border-2 border-gray-100 hover:border-green-400 p-4 rounded-2xl text-left transition-all group"
                 >
-                  <div className="text-2xl mb-2">{cat.emoji}</div>
+                  <cat.icon className="w-6 h-6 mb-2 text-gray-400 group-hover:text-green-500" />
                   <p className="font-medium text-sm group-hover:text-green-500">{cat.label}</p>
                 </button>
               ))}
@@ -1850,7 +1892,7 @@ export default function DashboardPage() {
               <div className="relative w-14 h-14">
                 <div className="absolute inset-0 rounded-full border-4 border-green-100"></div>
                 <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-green-400 animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center text-xl">🔥</div>
+                <div className="absolute inset-0 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-green-400" /></div>
               </div>
             </div>
             <h2 className="text-xl font-bold mb-2">트렌드·이슈 불러오는 중</h2>
@@ -1867,10 +1909,11 @@ export default function DashboardPage() {
         {mode === 'trend-result' && (
           <div className="space-y-4">
             <button onClick={() => setMode('trend-category')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold">트렌드·이슈 글감 발굴</h2>
-            <p className="text-gray-400 text-sm -mt-2">
-              카테고리: <span className="text-green-500 font-medium">
-                {CATEGORIES.find(c => c.id === trendCategory)?.emoji} {CATEGORIES.find(c => c.id === trendCategory)?.label}
+            <h2 className="text-xl font-bold pl-2">트렌드·이슈 글감 발굴</h2>
+            <p className="text-gray-400 text-sm -mt-2 pl-2">
+              카테고리: <span className="text-green-500 font-medium inline-flex items-center gap-1">
+                {(() => { const cat = CATEGORIES.find(c => c.id === trendCategory); return cat ? <cat.icon className="w-3.5 h-3.5" /> : null })()}
+                {CATEGORIES.find(c => c.id === trendCategory)?.label}
               </span>
             </p>
 
@@ -1880,13 +1923,13 @@ export default function DashboardPage() {
                 onClick={() => setTrendTab('issue')}
                 className={`flex-1 py-3 text-sm font-medium transition-colors ${trendTab === 'issue' ? 'bg-orange-50 text-orange-500 border-b-2 border-orange-400' : 'text-gray-400 hover:text-gray-600'}`}
               >
-                ⚡ 바이럴
+                <span className="flex items-center justify-center gap-1"><Zap className="w-3.5 h-3.5" /> 바이럴</span>
               </button>
               <button
                 onClick={() => setTrendTab('trend')}
                 className={`flex-1 py-3 text-sm font-medium transition-colors ${trendTab === 'trend' ? 'bg-green-50 text-green-500 border-b-2 border-green-400' : 'text-gray-400 hover:text-gray-600'}`}
               >
-                🔥 키워드
+                <span className="flex items-center justify-center gap-1"><Flame className="w-3.5 h-3.5" /> 키워드</span>
               </button>
             </div>
 
@@ -1929,7 +1972,7 @@ export default function DashboardPage() {
                   </div>
                 ) : !issueError && (
                   <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
-                    <p className="text-2xl mb-3">⚡</p>
+                    <Zap className="w-8 h-8 mx-auto mb-3 text-gray-300" />
                     <p className="font-medium mb-1">이 카테고리는 이슈 데이터가 없어요</p>
                     <p className="text-sm">트렌드 탭에서 DataLab 키워드를 확인해보세요</p>
                   </div>
@@ -1943,7 +1986,7 @@ export default function DashboardPage() {
                 {trendError && <p className="text-red-500 text-sm">{trendError}</p>}
                 {trendKeywords.length === 0 && !trendError ? (
                   <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
-                    <p className="text-2xl mb-3">🔄</p>
+                    <RefreshCw className="w-8 h-8 mx-auto mb-3 text-gray-300" />
                     <p className="font-medium mb-1">아직 데이터가 준비 중이에요</p>
                     <p className="text-sm">트렌드 수집은 매일 새벽 5시에 진행돼요</p>
                   </div>
@@ -1987,7 +2030,7 @@ export default function DashboardPage() {
                           {trendExpandedKeyword === kw.keyword && (
                             <div className="px-4 pb-4 bg-green-50">
                               {trendIdeasMap[kw.keyword] === 'loading' && (
-                                <p className="text-sm text-gray-400 pt-2">💡 글감 생성 중...</p>
+                                <p className="text-sm text-gray-400 pt-2 flex items-center gap-1.5"><Lightbulb className="w-4 h-4" /> 글감 생성 중...</p>
                               )}
                               {typeof trendIdeasMap[kw.keyword] === 'string' && trendIdeasMap[kw.keyword] !== 'loading' && (
                                 <p className="text-sm text-red-400 pt-2">오류: {trendIdeasMap[kw.keyword] as string}</p>
@@ -2029,7 +2072,7 @@ export default function DashboardPage() {
               <div className="relative w-14 h-14">
                 <div className="absolute inset-0 rounded-full border-4 border-red-100"></div>
                 <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-red-400 animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center text-xl">📰</div>
+                <div className="absolute inset-0 flex items-center justify-center"><Newspaper className="w-5 h-5 text-red-400" /></div>
               </div>
             </div>
             <h2 className="text-xl font-bold mb-2">뉴스 랭킹 불러오는 중</h2>
@@ -2046,8 +2089,8 @@ export default function DashboardPage() {
         {mode === 'news-result' && (
           <div className="space-y-4">
             <button onClick={resetAll} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold">실시간 인기 뉴스</h2>
-            <p className="text-gray-400 text-sm -mt-2">오늘 가장 많이 읽힌 뉴스로 블로그 글감을 만들어보세요</p>
+            <h2 className="text-xl font-bold pl-2">실시간 인기 뉴스</h2>
+            <p className="text-gray-400 text-sm -mt-2 pl-2">오늘 가장 많이 읽힌 뉴스로 블로그 글감을 만들어보세요</p>
             {newsRankingFetchedAt && (
               <p className="text-xs text-gray-300 -mt-1">
                 {(() => {
@@ -2067,7 +2110,7 @@ export default function DashboardPage() {
             {newsRankingItems.length > 0 ? (
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-5 pt-4 pb-3 border-b border-gray-50">
-                  <p className="text-xs font-semibold text-gray-800">📰 인기 뉴스 TOP {newsRankingItems.length}</p>
+                  <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Newspaper className="w-3.5 h-3.5" /> 인기 뉴스 TOP {newsRankingItems.length}</p>
                 </div>
                 <ul className="divide-y divide-gray-50">
                   {newsRankingItems.map((item, i) => (
@@ -2099,7 +2142,7 @@ export default function DashboardPage() {
               </div>
             ) : !newsRankingError && (
               <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
-                <p className="text-2xl mb-3">📰</p>
+                <Newspaper className="w-8 h-8 mx-auto mb-3 text-gray-300" />
                 <p className="font-medium mb-1">뉴스를 불러오지 못했어요</p>
                 <p className="text-sm">잠시 후 다시 시도해주세요</p>
               </div>
@@ -2111,13 +2154,13 @@ export default function DashboardPage() {
         {mode === 'keyword-insight-result' && insightData && (
           <div className="space-y-4">
             <button onClick={() => { setInsightKeyword(''); setInsightData(null); setMode('keyword-insight-input') }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold">키워드 인사이트</h2>
-            <p className="text-gray-400 text-sm -mt-2">키워드: <span className="text-blue-500 font-medium">{insightKeyword}</span></p>
+            <h2 className="text-xl font-bold pl-2">키워드 인사이트</h2>
+            <p className="text-gray-400 text-sm -mt-2 pl-2">키워드: <span className="text-blue-500 font-medium">{insightKeyword}</span></p>
 
             {/* 트렌드 방향 + 계절성 */}
             {(insightData.trendDirection || insightData.seasonality?.note) && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-800 mb-3">📈 검색량 추이</p>
+                <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> 검색량 추이</p>
                 <div className="space-y-2">
                   {insightData.trendDirection && (
                     <p className={`text-sm font-medium ${
@@ -2134,18 +2177,18 @@ export default function DashboardPage() {
                     </p>
                   )}
                   {insightData.seasonality?.note && (
-                    <p className="text-sm text-yellow-600">📅 {insightData.seasonality.note}</p>
+                    <p className="text-sm text-yellow-600 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {insightData.seasonality.note}</p>
                   )}
                 </div>
               </div>
             )}
 
-            <InsightTable title="📊 메인 키워드" items={[insightData.main]} />
+            <InsightTable title="메인 키워드" icon="chart" items={[insightData.main]} />
             {insightData.autocomplete.length > 0 && (
-              <InsightTable title={`✏️ 자동완성 키워드 (${insightData.autocomplete.length}개)`} items={insightData.autocomplete} />
+              <InsightTable title={`자동완성 키워드 (${insightData.autocomplete.length}개)`} icon="pencil" items={insightData.autocomplete} />
             )}
             {insightData.related.length > 0 && (
-              <InsightTable title={`🔗 연관 키워드 (${insightData.related.length}개)`} items={insightData.related} />
+              <InsightTable title={`연관 키워드 (${insightData.related.length}개)`} icon="link" items={insightData.related} />
             )}
           </div>
         )}
@@ -2167,11 +2210,11 @@ function ShortentsIdeaBlock({ ideasState }: { ideasState: ShortentsIdea[] | 'loa
       {(ideasState as ShortentsIdea[]).map((idea, i) => (
         <div key={i} className="bg-white rounded-xl p-4 shadow-sm space-y-2">
           <div className="bg-blue-50 rounded-lg px-3 py-2">
-            <p className="text-xs text-blue-400 font-medium mb-0.5">🔍 검색형</p>
+            <p className="text-xs text-blue-400 font-medium mb-0.5 flex items-center gap-1"><Search className="w-3 h-3" /> 검색형</p>
             <p className="text-sm font-medium text-gray-800">{idea.searchTitle}</p>
           </div>
           <div className="bg-orange-50 rounded-lg px-3 py-2">
-            <p className="text-xs text-orange-400 font-medium mb-0.5">📱 홈피드형</p>
+            <p className="text-xs text-orange-400 font-medium mb-0.5 flex items-center gap-1"><Smartphone className="w-3 h-3" /> 홈피드형</p>
             <p className="text-sm font-medium text-gray-800">{idea.feedTitle}</p>
           </div>
           {idea.keywords.length > 0 && (
@@ -2195,10 +2238,11 @@ function competitionClass(color: string) {
   return 'text-gray-500 bg-gray-50'
 }
 
-function InsightTable({ title, items }: { title: string; items: InsightKeywordItem[] }) {
+function InsightTable({ title, icon, items }: { title: string; icon?: 'chart' | 'pencil' | 'link'; items: InsightKeywordItem[] }) {
+  const Icon = icon === 'pencil' ? Pencil : icon === 'link' ? Link2 : BarChart2
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm">
-      <p className="text-xs font-semibold text-gray-800 mb-3">{title}</p>
+      <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><Icon className="w-3.5 h-3.5" /> {title}</p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -2220,8 +2264,9 @@ function InsightTable({ title, items }: { title: string; items: InsightKeywordIt
                   {item.blogCount !== null ? item.blogCount.toLocaleString() : '-'}
                 </td>
                 <td className="py-2.5 text-center">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${competitionClass(item.competition.color)}`}>
-                    {item.competition.emoji} {item.competition.label}
+                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${competitionClass(item.competition.color)}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${item.competition.color === 'green' ? 'bg-green-500' : item.competition.color === 'yellow' ? 'bg-yellow-400' : item.competition.color === 'orange' ? 'bg-orange-400' : 'bg-red-400'}`} />
+                    {item.competition.label}
                   </span>
                 </td>
               </tr>
