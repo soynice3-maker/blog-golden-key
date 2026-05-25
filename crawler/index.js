@@ -201,6 +201,7 @@ async function scrapePost(context, link) {
       ).filter(Boolean))
 
       const headingEls = Array.from(content.querySelectorAll([
+        '.se-quotation-container',
         '.se-component.se-heading',
         '.se-l-heading1', '.se-l-heading2', '.se-l-heading3',
         '.se-heading2', '.se-heading3',
@@ -215,6 +216,11 @@ async function scrapePost(context, link) {
         headingTexts = numbered
       }
 
+      const videoEls = Array.from(content.querySelectorAll(
+        'video, iframe[src*="tv.naver"], iframe[src*="youtube.com"], iframe[src*="youtu.be"], iframe[src*="naver.me"]'
+      ))
+      const videoCount = videoEls.length
+
       const hashEls = Array.from(content.querySelectorAll(
         '.se-component.se-hash .se-hash-item a, .se-hashtag a, .se-hash-link'
       ))
@@ -228,8 +234,9 @@ async function scrapePost(context, link) {
       hashtags = [...new Set(hashtags.flatMap(t => t.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean)))]
 
       return {
-        charCount: text.replace(/\s/g, '').length,
+        charCount: text.replace(/#[가-힣a-zA-Z0-9_]{2,20}/g, '').replace(/\s/g, '').length,
         imageCount: uniqueSrcs.size,
+        videoCount,
         headingCount: headingTexts.length,
         headingTexts: headingTexts.slice(0, 10),
         hashtags,
@@ -361,6 +368,7 @@ app.get('/analyze-top-posts', async (req, res) => {
     const average = validPosts.length > 0 ? {
       charCount: Math.round(validPosts.reduce((s, p) => s + (p.charCount || 0), 0) / validPosts.length),
       imageCount: Math.round(validPosts.reduce((s, p) => s + (p.imageCount || 0), 0) / validPosts.length),
+      videoCount: Math.round(validPosts.reduce((s, p) => s + (p.videoCount || 0), 0) / validPosts.length),
       headingCount: Math.round(validPosts.reduce((s, p) => s + (p.headingCount || 0), 0) / validPosts.length),
     } : null
 
@@ -419,6 +427,24 @@ app.get('/extract-place', async (req, res) => {
       await page.waitForTimeout(2000)
     }
 
+    // 전화번호 보기 버튼 클릭 (Naver Place는 버튼 클릭 후 전화번호 표시)
+    try {
+      const phoneBtn = page.locator('button').filter({ hasText: /전화/ }).first()
+      if (await phoneBtn.count() > 0) {
+        await phoneBtn.click()
+        await page.waitForTimeout(700)
+      }
+    } catch {}
+
+    // 영업시간 펼쳐보기 버튼 클릭 (토글 기본값: 닫힘)
+    try {
+      const expandBtn = page.locator('button').filter({ hasText: '펼쳐보기' }).first()
+      if (await expandBtn.count() > 0) {
+        await expandBtn.click()
+        await page.waitForTimeout(500)
+      }
+    } catch {}
+
     const data = await page.evaluate(() => {
       const getText = (...selectors) => {
         for (const sel of selectors) {
@@ -429,11 +455,52 @@ app.get('/extract-place', async (req, res) => {
         return ''
       }
 
+      const bodyText = document.body.innerText
+
       const name = getText('span.GHAhO', '.zD5Nm span', '.Fc1rA span', 'h2.place_section_header_title')
       const category = getText('span.lnJFt', '.DJJvD', '.category_name')
-      const address = getText('span.LDgIH', '.zDTQ span', '.addr span')
-      const phone = getText('span.xlx3J', '.fvwqf span', 'a[href^="tel:"]')
-      const hours = getText('.y6tNq', '.O8qbU', '[class*="businessHour"] span')
+
+      // Phone: tel 링크 href 우선, 없으면 전화번호 패턴으로 폴백
+      const telEl = document.querySelector('a[href^="tel:"]')
+      let phone = telEl ? (telEl.getAttribute('href') || '').replace('tel:', '').trim() : ''
+      if (!phone) {
+        const phoneMatch = bodyText.match(/\d{2,4}-\d{3,4}-\d{4}/)
+        if (phoneMatch) phone = phoneMatch[0]
+      }
+
+      // Address: 셀렉터 시도 후 한국 주소 패턴으로 폴백
+      let address = getText('span.LDgIH', '.zDTQ span', '.addr span')
+      if (!address) {
+        const addrMatch = bodyText.match(/(서울|경기|인천|부산|대구|대전|광주|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)[^\n]{4,60}(?:로|길)\s*\d*(?:-\d+)?/)
+        if (addrMatch) address = addrMatch[0].trim()
+      }
+
+      // Hours: 펼쳐보기 클릭 후 innerText 기반 추출
+      let hours = ''
+      for (const sel of ['.y6tNq', '.O8qbU', '[class*="businessHour"]']) {
+        const el = document.querySelector(sel)
+        if (!el) continue
+        let text = el.innerText?.trim() || ''
+        // UI 버튼 텍스트 제거
+        text = text.replace(/펼쳐보기|접기/g, '')
+        // 중복 "XX시 XX분에 라스트오더" 제거
+        text = text.replace(/\d+시\s*\d+분에\s*라스트오더\s*/g, '')
+        // 한글-숫자 사이 공백 추가
+        text = text.replace(/([가-힣])(\d)/g, '$1 $2').replace(/(\d)([가-힣])/g, '$1 $2')
+        text = text.replace(/\n{2,}/g, '\n').replace(/[ \t]+/g, ' ').trim()
+        if (text) { hours = text; break }
+      }
+      if (!hours) {
+        const m = bodyText.match(/영업\s*(?:중|종료|준비|전)\s*[^\n]{0,40}/)
+        if (m) hours = m[0].replace(/펼쳐보기.*$/, '').replace(/\d+시\s*\d+분에\s*라스트오더/g, '').replace(/\s+/g, ' ').trim()
+      }
+
+      // Amenities: "편의" 섹션에서 추출
+      let amenities = []
+      const convMatch = bodyText.match(/\n편의\n([^\n]{2,200})/)
+      if (convMatch) {
+        amenities = convMatch[1].split(/[,，]/).map(s => s.trim()).filter(t => t.length > 1 && t.length < 30)
+      }
 
       const menuEls = document.querySelectorAll(
         '.MXkFw li .name, [class*="menuItem"] .name, .lwo7m .name, .tByHM'
@@ -443,7 +510,7 @@ app.get('/extract-place', async (req, res) => {
         .map(el => el.textContent?.trim())
         .filter(t => t && t.length < 80)
 
-      return { name, category, address, phone, hours, menuItems }
+      return { name, category, address, phone, hours, amenities, menuItems }
     })
 
     await context.close()
@@ -458,6 +525,7 @@ app.get('/extract-place', async (req, res) => {
     if (data.address) lines.push(`주소: ${data.address}`)
     if (data.phone) lines.push(`전화: ${data.phone}`)
     if (data.hours) lines.push(`영업시간: ${data.hours}`)
+    if (data.amenities && data.amenities.length > 0) lines.push(`편의: ${data.amenities.join(', ')}`)
     if (data.menuItems.length > 0) lines.push(`메뉴: ${data.menuItems.join(', ')}`)
 
     res.json({ success: true, ...data, formatted: lines.join('\n') })

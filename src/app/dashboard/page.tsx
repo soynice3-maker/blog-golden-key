@@ -95,6 +95,7 @@ interface CrawlPost {
   blockName: string
   charCount: number
   imageCount: number
+  videoCount?: number
   headingCount: number
   hashtags: string[]
   headingTexts?: string[]
@@ -106,7 +107,7 @@ interface CrawlData {
   smartBlocks: string[]
   allTitles: { title: string; blockName: string; type: string }[]
   posts: CrawlPost[]
-  average: { charCount: number; imageCount: number; headingCount: number } | null
+  average: { charCount: number; imageCount: number; videoCount: number; headingCount: number } | null
   topHashtags: { tag: string; count: number }[]
   error?: string
 }
@@ -137,7 +138,10 @@ interface Analysis {
   // 구조
   avgChars: number
   avgImages: number
+  avgVideos: number
   avgHeadings: number
+  headingNumbered: boolean
+  mobileOptPct: number
   smartBlocks: string[]
   // 인사이트
   insights: string[]
@@ -167,7 +171,20 @@ const HASHTAG_STOPS = new Set([
   '있는데','있어요','없어요','합니다','됩니다','입니다','이에요','예요',
   '했는데','이라고','오늘은','이번에',
   '정말로','너무나','진짜로','너무','정말','진짜','여러분',
+  // 동사/형용사 어미형 추가
+  '있는','없는','있고','없고','있어','없어','있다','없다',
+  '됩니다','됐어','됐고','됐는데','되는','되어','되고',
+  '했어','했고','했는데','하는','하고','하여','하며',
+  '같아','같은','같이','같고','같은데',
+  '이어서','이었고','이었는데','였고','였는데',
+  '많아','많은','많이','많고','좋아','좋은','좋고',
+  '나와','나오는','나오고','들어','들어가','들어오',
+  '받아','받은','받고','보여','보이는','보이고',
+  '올라','올라가','내려','내려가','나눠','나누는',
 ])
+
+// 안 1: 동사/형용사 어미 패턴 필터
+const VERB_ADJ_ENDINGS = /(?:습니다|읍니다|있습니다|없습니다|합니다|됩니다|입니다|었습니다|았습니다|겠습니다|어요|아요|이에요|예요|네요|군요|죠|었어|았아|겠어|는데|은데|ㄴ데|지만|면서|니까|더니|거든|잖아|잖은|이잖|구나|구요|고요|고서|어서|아서|면서|이면|라면|다면|는지|은지|ㄹ지|ㄹ까|을까|는가|은가|ㄴ가|는다|은다|ㄴ다|는걸|은걸|ㄴ걸|는걸요|해줘|해줘요|해줘서|해줘야|해주세요|해보|해봐|해봤|하자|하죠|하며|하여|하는|하던|했던|했을|할게|할까|할지|할수|할때|할때는)$/
 
 function stripParticle(word: string): string {
   if (word.length < 3) return word
@@ -184,10 +201,13 @@ function stripParticle(word: string): string {
 
 function cleanTag(t: string) {
   const stripped = stripParticle(t.trim())
-  return stripped.length >= 2 && !HASHTAG_STOPS.has(stripped) ? stripped : ''
+  if (stripped.length < 2) return ''
+  if (HASHTAG_STOPS.has(stripped)) return ''
+  if (VERB_ADJ_ENDINGS.test(stripped)) return ''
+  return stripped
 }
 
-function runAnalysis(keyword: string, cd: CrawlData, brandName = ''): Analysis {
+function runAnalysis(keyword: string, cd: CrawlData, brandName = '', originalInput = ''): Analysis {
   const kw = keyword.trim()
   const kwNospace = kw.replace(/\s+/g, '')
   const kwLower = kw.toLowerCase()
@@ -301,7 +321,17 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = ''): Analysis {
   const avg = cd.average
   const avgChars = avg?.charCount || 0
   const avgImages = avg?.imageCount || 0
+  const avgVideos = avg?.videoCount || 0
   const avgHeadings = avg?.headingCount || 0
+
+  // ── 모바일 최적화 감지 (줄 평균 글자 수 20자 이하)
+  const mobileOptCount = analyzePosts.filter(p => {
+    const lines = (p.fullText || '').split('\n').filter(l => l.trim().length > 1)
+    if (lines.length < 5) return false
+    const avgLineLen = lines.reduce((s, l) => s + l.trim().length, 0) / lines.length
+    return avgLineLen <= 20
+  }).length
+  const mobileOptPct = analyzePosts.length > 0 ? Math.round(mobileOptCount / analyzePosts.length * 100) : 0
 
   // ── 인사이트 생성 (수치 기반, 구체적)
   const insights: string[] = []
@@ -364,13 +394,20 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = ''): Analysis {
     titleStructure.push(`자주 쓰인 수식어 활용: ${topMod.join(', ')}`)
 
   const contentPoints: string[] = []
-  if (avgChars > 0) contentPoints.push(`글자 수 ${avgChars.toLocaleString()}자 이상 작성`)
+  if (avgChars > 0) contentPoints.push(`글자 수 ${avgChars.toLocaleString()}자 이상 작성 (해시태그 제외)`)
   if (avgImages > 0) contentPoints.push(`이미지 ${avgImages}장 이상 첨부`)
+  if (avgVideos > 0) contentPoints.push(`영상 ${avgVideos}개 이상 삽입`)
+  if (mobileOptPct >= 50) contentPoints.push(`모바일 최적화 스타일 — 한 줄 20자 이하로 짧게 줄 바꿈하여 작성`)
+  const allHeadingTexts = posts.flatMap(p => p.headingTexts || [])
+  const numberedPostCount = posts.filter(p => {
+    const ht = p.headingTexts || []
+    if (ht.length === 0) return false
+    return ht.filter(t => /^\d+\./.test(t)).length > ht.length * 0.5
+  }).length
+  const headingNumbered = numberedPostCount > posts.filter(p => (p.headingTexts || []).length > 0).length * 0.5
   if (avgHeadings > 0) {
-    const allHeadingTexts = posts.flatMap(p => p.headingTexts || [])
-    const numberedCount = allHeadingTexts.filter(t => /^\d+\./.test(t)).length
     const sampleHeading = allHeadingTexts.find(t => /^\d+\./.test(t))?.replace(/^\d+\.\s*/, '') || ''
-    if (numberedCount > allHeadingTexts.length * 0.4 && sampleHeading) {
+    if (headingNumbered && sampleHeading) {
       contentPoints.push(`소제목 ${avgHeadings}개 — 숫자형 형식 사용 (예: "1. ${sampleHeading}")`)
     } else if (allHeadingTexts.length > 0) {
       contentPoints.push(`소제목 ${avgHeadings}개 — 각 섹션별 주제 명확히 구분`)
@@ -387,7 +424,7 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = ''): Analysis {
   if (relatedKeywords.length > 0)
     contentPoints.push(`연관 키워드 분산 배치: ${relatedKeywords.slice(0, 4).map(r => r.word).join(', ')}`)
 
-  // ── 해시태그 (V2: 관련 글에서만 추출)
+  // ── 해시태그 (V3: 키워드 관련성 필터 추가)
   const hashtagFreq: Record<string, number> = {}
   analyzePosts.forEach(p => {
     (p.hashtags || []).forEach(tag => {
@@ -395,7 +432,24 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = ''): Analysis {
       if (cleaned.length >= 2) hashtagFreq[cleaned] = (hashtagFreq[cleaned] || 0) + 1
     })
   })
+
+  const GENERIC_HASHTAGS = ['맛집', '리뷰', '후기', '추천', '내돈내산', '솔직후기', '방문기', '먹스타그램', '밥스타그램', '맛스타그램', '일상', '데이트', '소통', '이웃']
+  // 원본 입력(공백 포함)에서 단어 분리 → 복합 키워드도 개별 부분 매칭 가능
+  const inputWords = originalInput.split(/\s+/).filter(w => w.length >= 2).map(w => w.toLowerCase())
+  const hashRelevantWords = [
+    kwNospace.toLowerCase(),
+    ...kw.split(/\s+/).filter(w => w.length >= 2).map(w => w.toLowerCase()),
+    ...inputWords,
+    ...(brandLower ? brandLower.split(/\s+/).filter(w => w.length >= 2) : []),
+    ...relatedKeywords.slice(0, 8).map(r => r.word.toLowerCase()),
+  ]
+
   let topHashtags = Object.entries(hashtagFreq)
+    .filter(([tag]) => {
+      const tLower = tag.toLowerCase()
+      if (GENERIC_HASHTAGS.some(g => tLower.includes(g))) return true
+      return hashRelevantWords.some(w => tLower.startsWith(w) || tLower === w)
+    })
     .sort((a, b) => b[1] - a[1])
     .slice(0, 15)
     .map(([tag, count]) => ({ tag, count }))
@@ -409,9 +463,10 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = ''): Analysis {
       ...relatedKeywords.map(r => r.word),
     ]
       .map(t => cleanTag(t))
-      .filter(t => t && !existing.has(t))
+      .filter(t => t.length >= 2)
     for (const tag of candidates) {
       if (topHashtags.length >= 10) break
+      if (existing.has(tag)) continue
       topHashtags = [...topHashtags, { tag, count: 0 }]
       existing.add(tag)
     }
@@ -427,7 +482,7 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = ''): Analysis {
     perPostKw,
     relatedKeywords,
     topHashtags,
-    avgChars, avgImages, avgHeadings,
+    avgChars, avgImages, avgVideos, avgHeadings, headingNumbered, mobileOptPct,
     smartBlocks: cd.smartBlocks || [],
     insights,
     strategy: { titleStructure, contentPoints },
@@ -449,62 +504,69 @@ function buildPrompt(keyword: string, subKeywords: string, topic: string, notes:
     ? `\n서브 키워드: ${subKeywords.trim().split(/[,，\s]+/).filter(Boolean).join(', ')}`
     : ''
 
-  return `네이버 SEO에 최적화된 상위노출 블로그 글을 작성해줘.
+  const hasPlaceInfo = /가게명:|전화:|주소:|영업시간:/.test(notes)
+  const kwPos = a && a.frontCount >= (a.titleTotal || 1) * 0.5 ? '앞부분' : '중반부'
+  const kwForm = a && a.joinedCount > a.spacedCount ? kw.replace(/\s/g, '') : kw
+
+  return `네이버 SEO 상위노출 블로그 글 작성 요청
 
 키워드: ${kw}${subKwLine}${topic ? `\n주제: ${topic}` : ''}
 
-[상위노출 패턴 — 알고리즘 분석 결과]
-• 평균 글자수: ${a?.avgChars.toLocaleString() || '-'}자 (공백제외)
-• 평균 이미지: ${a?.avgImages || '-'}장
-• 평균 소제목: ${a?.avgHeadings || '-'}개
-• 목표 스마트블록: ${blocks}
-• 본문 키워드 평균 노출: ${a?.avgKwCount || '-'}회 (밀도 ${a?.avgKwDensity || '-'}‰)
-• 키워드 첫 등장: ${a?.avgFirstPos || '-'}
+━━━ 제목 작성 ━━━
+[분석 데이터]
+• 평균 길이: ${a?.avgTitleLength || '-'}자
+• 키워드 위치: 제목 ${kwPos}
+• 키워드 표기: '${kwForm}' 권장
+• 자주 쓰인 수식어: ${a?.modifiers.slice(0, 4).map(m => m.word).join(', ') || '-'}
 
-[제목 패턴]
-• 평균 제목 길이: ${a?.avgTitleLength || '-'}자
-• 키워드 형태: ${a && a.joinedCount > a.spacedCount ? `붙여쓰기 '${kw.replace(/\s/g, '')}'` : `띄어쓰기 '${kw}'`} 권장
-• 키워드 위치: ${a && a.frontCount >= (a.titleTotal || 1) * 0.5 ? '제목 앞부분 배치' : '제목 중반 배치'}
-• 자주 쓰이는 수식어: ${a?.modifiers.slice(0, 4).map(m => m.word).join(', ') || '-'}
-
-[상위노출 제목 참고 — 표절 금지, 구조·패턴만 참고]
+[참고 제목 — 절대 표절 금지, 길이·위치·수식어 패턴만 참고]
 ${titles.join('\n') || '  (없음)'}
 
-[알고리즘 인사이트]
+[제목 작성 규칙]
+- 위 참고 제목들을 표절하지 말고 패턴만 참고해서 완전히 새로운 제목을 써줘
+- 키워드 '${kwForm}'를 제목 ${kwPos}에 배치, ${a?.avgTitleLength || 20}자 내외
+${titlePoints ? titlePoints : ''}
+
+━━━ 본문 작성 ━━━
+[알고리즘 분석]
+• 목표 글자수: ${a?.avgChars.toLocaleString() || '-'}자 (공백·해시태그 제외)
+• 이미지: ${a?.avgImages || '-'}장 이상
+• 소제목: ${a?.avgHeadings || '-'}개 (이모지 또는 숫자형)
+• 목표 블록: ${blocks}
+• 키워드 등장: ${a?.avgKwCount || '-'}회 이상 (밀도 ${a?.avgKwDensity || '-'}‰)
+• 키워드 첫 등장: ${a?.avgFirstPos || '-'}
+
+[인사이트]
 ${insightLines || '  (없음)'}
 
 [작성 포인트]
-제목 구조:
-${titlePoints || '  (없음)'}
-본문 구조:
 ${contentPoints || '  (없음)'}
 
-[연관 키워드 — 본문에 자연스럽게 녹여야 할 단어들]
+[연관 키워드 — 본문에 자연스럽게 녹이기]
 ${related}
 
-[추천 해시태그 — 상위노출 글 빈도 기준]
-${hashtags || '(없음)'}
-
 [작성 규칙]
-- 제목: 키워드 앞부분 배치, 수식어로 클릭 유도, ${a?.avgTitleLength || 20}자 내외
-- 인트로: 첫 200자 내 키워드 자연스럽게 등장${a && a.postsAnalyzed > 0 && a.introKwCount === a.postsAnalyzed ? ' — 상위노출 글 전체 공통 패턴, 필수' : a && a.introKwCount > 0 ? ' — 상위노출 글 다수 공통 패턴, 권장' : ''}
-- 본문: 키워드 ${a?.avgKwCount || 5}회 이상, 밀도 ${a?.avgKwDensity || 3}‰ 수준으로 자연스럽게 반복
-- 서브 키워드${subKwLine ? ` (${subKeywords.trim()})` : ''}를 본문에 자연스럽게 포함
+- 인트로: 첫 200자 내 키워드 자연스럽게 등장${a && a.postsAnalyzed > 0 && a.introKwCount === a.postsAnalyzed ? ' (상위노출 글 전체 공통, 필수)' : a && a.introKwCount > 0 ? ' (상위노출 글 다수 공통, 권장)' : ''}
+${hasPlaceInfo ? '- 가게 기본 정보(가게명·주소·전화번호·영업시간)는 인트로 직후 방문 전 체크 섹션에 배치 (맨 아래 요약 박스 X, 본문 초반 필수)' : ''}
+- 키워드 '${kwForm}' ${a?.avgKwCount || 5}회 이상, 밀도 ${a?.avgKwDensity || 3}‰ 수준으로 자연스럽게 반복
+- 서브 키워드를 본문에 자연스럽게 포함
 - 연관 키워드 위에서 선별해 본문 전반에 분산 배치
-- 소제목 ${a?.avgHeadings || 4}개, 이모지 또는 숫자형 형식
-- 마지막에 정보 요약 박스 포함
-- 해시태그로 마무리: ${hashtags || '관련 태그 5~7개'}
 - 마크다운 헤더(##), HTML 태그 사용 금지
+- 참고사항에 오타가 있으면 자연스럽게 수정해서 반영
 ${notes ? `\n[내 정보 / 참고사항]\n${notes}` : ''}
 
-위 분석 데이터를 반영해서 실제 상위노출 가능한 네이버 블로그 글을 완성해줘.`
+━━━ 해시태그 ━━━
+아래 해시태그로 마무리해줘. 글자수는 해시태그 제외 ${a?.avgChars?.toLocaleString() || 2000}자 이상 기준:
+${hashtags || '관련 해시태그 5~7개'}
+
+위 분석 데이터를 반영해서 제목부터 해시태그까지 완성해줘.`
 }
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [mode, setMode] = useState<'home' | 'write-input' | 'analyzing' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result'>('home')
+  const [mode, setMode] = useState<'home' | 'write-input' | 'analyzing' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result'>('home')
 
   const [topic, setTopic] = useState('')
   const [brandName, setBrandName] = useState('')
@@ -562,6 +624,13 @@ export default function DashboardPage() {
   const [newsIdeasMap, setNewsIdeasMap] = useState<Record<string, ShortentsIdea[] | 'loading' | 'error'>>({})
   const [newsExpandedItem, setNewsExpandedItem] = useState<string | null>(null)
 
+  // supplement-input state
+  const [commonSections, setCommonSections] = useState<{ topic: string; note: string }[]>([])
+  const [sectionsLoading, setSectionsLoading] = useState(false)
+  const [supplementMap, setSupplementMap] = useState<Record<string, string>>({})
+  const [savedKeyword, setSavedKeyword] = useState('')
+  const [savedSubKws, setSavedSubKws] = useState('')
+
   const router = useRouter()
   const supabase = createClient()
 
@@ -597,7 +666,22 @@ export default function DashboardPage() {
     setTrendCategory(''); setTrendTab('issue'); setTrendKeywords([]); setTrendError(''); setTrendExpandedKeyword(null); setTrendIdeasMap({})
     setIssueTitles([]); setIssueError(''); setIssueExpandedTopic(null); setIssueIdeasMap({})
     setNewsRankingItems([]); setNewsRankingFetchedAt(null); setNewsRankingError(''); setNewsIdeasMap({}); setNewsExpandedItem(null)
+    setCommonSections([]); setSectionsLoading(false); setSupplementMap({}); setSavedKeyword(''); setSavedSubKws('')
     setMode('home')
+  }
+
+  const isCoveredInNotes = (sectionTopic: string): boolean => {
+    if (!notes) return false
+    const words = sectionTopic.replace(/[·\/]+/g, ' ').split(/\s+/).filter(w => w.length >= 2)
+    return words.some(w => notes.includes(w))
+  }
+
+  const proceedToPrompt = () => {
+    const supplementEntries = Object.entries(supplementMap).filter(([, v]) => v.trim())
+    const supplementText = supplementEntries.map(([t, v]) => `${t}: ${v}`).join('\n')
+    const finalNotes = notes && supplementText ? `${notes}\n${supplementText}` : notes || supplementText
+    setPrompt(buildPrompt(savedKeyword, savedSubKws, topic, finalNotes, keywordData, crawlData, analysis))
+    setMode('result')
   }
 
   const fetchGoldenKeywords = async (category: string, offset: number, append = false) => {
@@ -880,12 +964,39 @@ export default function DashboardPage() {
       const crawlRes = await fetch(`http://localhost:3001/analyze-top-posts?keyword=${encodeURIComponent(selectedKw)}`)
       const cd: CrawlData = await crawlRes.json()
 
-      const a = runAnalysis(selectedKw, cd, brandName)
+      const a = runAnalysis(selectedKw, cd, brandName, allKws.join(' '))
       setKeywordData(best)
       setCrawlData(cd)
       setAnalysis(a)
-      setPrompt(buildPrompt(selectedKw, allSubKws, topic, notes, best, cd, a))
-      setMode('result')
+      setSavedKeyword(selectedKw)
+      setSavedSubKws(allSubKws)
+      setCommonSections([])
+      setSupplementMap({})
+      setSectionsLoading(true)
+      setMode('supplement-input')
+
+      // 비동기로 공통 섹션 분석 (화면 전환 후 백그라운드)
+      ;(async () => {
+        try {
+          const postsForAnalysis = (cd.posts || []).slice(0, 3).map((p: CrawlPost) => ({
+            title: p.title,
+            fullText: (p.fullText || '').slice(0, 1500)
+          }))
+          if (postsForAnalysis.length > 0) {
+            const res = await fetch('/api/analyze-common-sections', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ keyword: selectedKw, topic, posts: postsForAnalysis })
+            })
+            const data = await res.json()
+            setCommonSections(data.sections || [])
+          }
+        } catch {
+          setCommonSections([])
+        } finally {
+          setSectionsLoading(false)
+        }
+      })()
     } catch {
       setError('분석 중 오류가 발생했습니다. 크롤러 서버가 실행 중인지 확인해주세요.')
       setMode('write-input')
@@ -1019,7 +1130,7 @@ export default function DashboardPage() {
                       className="flex-1 min-w-[120px] outline-none bg-transparent py-1 placeholder:text-gray-300" />
                   )}
                 </div>
-                <p className="text-xs text-gray-400 mt-1 pl-3">키워드 최대 3개 입력 — 경쟁강도 가장 낮은 키워드가 자동으로 타겟으로 선정돼요</p>
+                <p className="text-xs text-gray-400 mt-1 pl-3">최대 3개까지 쉼표(,)로 구분해서 입력하면 상위노출에 가장 유리한 키워드를 자동으로 골라드려요</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">서브 키워드 <span className="text-gray-400 font-normal">(선택)</span></label>
@@ -1039,14 +1150,14 @@ export default function DashboardPage() {
                     onKeyDown={handleSubKeywordKeyDown}
                     className="flex-1 min-w-[120px] outline-none bg-transparent py-1 placeholder:text-gray-300" />
                 </div>
-                <p className="text-xs text-gray-400 mt-1 pl-3">함께 노출되길 원하는 키워드를 쉼표(,)로 구분해서 입력하고 Enter를 누르세요</p>
+                <p className="text-xs text-gray-400 mt-1 pl-3">함께 노출되길 원하는 키워드를 쉼표(,)로 구분해서 입력하세요</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">참고사항 <span className="text-gray-400 font-normal">(선택)</span></label>
-                <textarea placeholder={`예)\n주차가 협소해서 대중교통 이용 추천\n웨이팅이 있지만 회전율이 빨라서 금방 입장 가능\n떡볶이보다 튀김이 더 맛있었음\n혼밥하기 좋은 1인석 있음`}
+                <textarea placeholder={`예:\n주차가 협소해서 대중교통 이용 추천\n웨이팅이 있지만 회전율이 빨라서 금방 입장 가능\n떡볶이보다 튀김이 더 맛있었음\n혼밥하기 좋은 1인석 있음`}
                   value={notes} onChange={e => setNotes(e.target.value)} rows={5}
                   className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 mt-1 pl-4">포스팅에 담고 싶은 내용이나 경험을 자유롭게 적어주세요</p>
+                <p className="text-xs text-gray-400 mt-0.5 pl-3">포스팅에 담고 싶은 내용이나 경험을 자유롭게 적어주세요</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">참고 링크 <span className="text-gray-400 font-normal">(선택)</span></label>
@@ -1091,6 +1202,89 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* ── supplement-input ── */}
+        {mode === 'supplement-input' && (
+          <div className="space-y-4">
+            <button onClick={() => setMode('write-input')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            <h2 className="text-xl font-bold">상위노출 최적화 체크리스트</h2>
+            <p className="text-gray-600 text-sm -mt-2">
+              상위노출을 위해 꼭 담아야 할 항목들이에요. <span className="text-blue-500">체크되지 않은 항목에 내용을 입력하면</span> 자동으로 체크돼요. <span className="inline-block bg-blue-100 text-blue-500 text-xs px-2 py-0.5 rounded-full font-medium">선택사항</span>이지만 많이 채울수록 상위 노출 확률이 올라가요.
+            </p>
+
+            {sectionsLoading ? (
+              <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="relative w-12 h-12">
+                    <div className="absolute inset-0 rounded-full border-4 border-purple-100"></div>
+                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-purple-400 animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center text-lg">✨</div>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500 font-medium">상위 노출 글 공통 패턴 분석 중...</p>
+                <p className="text-xs text-gray-400 mt-1">분석하고 있어요.</p>
+              </div>
+            ) : commonSections.length === 0 ? (
+              <div className="bg-white rounded-2xl p-5 shadow-sm text-center text-gray-400 text-sm">
+                공통 섹션 분석 결과가 없어요. 그냥 프롬프트를 생성해주세요.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {commonSections.map(section => {
+                  const coveredByNotes = isCoveredInNotes(section.topic)
+                  const covered = coveredByNotes || !!(supplementMap[section.topic]?.trim())
+                  return (
+                    <div key={section.topic} className={`rounded-2xl p-5 shadow-sm ${covered ? 'bg-white opacity-70' : 'bg-blue-50'}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`w-5 h-5 rounded shrink-0 mt-0.5 border-2 flex items-center justify-center ${covered ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'}`}>
+                          {covered && (
+                            <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                              <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className={`font-semibold text-sm ${covered ? 'text-gray-400 italic' : 'text-gray-800'}`}>
+                            {section.topic}
+                            {!covered && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full font-medium">추가필요</span>}
+                            {covered && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-medium">작성완료</span>}
+                          </p>
+                          <p className={`text-xs text-gray-500 mt-0.5 leading-relaxed ${covered ? 'italic' : ''}`}><span className="text-gray-600 font-medium">예:</span> {section.note}</p>
+                          {!coveredByNotes && (
+                            <textarea
+                              value={supplementMap[section.topic] || ''}
+                              onChange={e => setSupplementMap(prev => ({ ...prev, [section.topic]: e.target.value }))}
+                              placeholder="이 항목에 대해 작성할 내용을 입력하세요."
+                              rows={2}
+                              className="mt-3 w-full px-4 py-2 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300 bg-white"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={proceedToPrompt}
+                className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600"
+              >
+                {Object.values(supplementMap).some(v => v.trim()) ? '추가하고 프롬프트 생성 →' : '프롬프트 생성 →'}
+              </button>
+              {!sectionsLoading && Object.values(supplementMap).some(v => v.trim()) && (
+                <button
+                  onClick={() => { setSupplementMap({}); proceedToPrompt() }}
+                  className="w-full text-gray-400 text-sm py-2 hover:text-gray-600"
+                >
+                  입력 내용 없이 건너뛰기
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── result ── */}
         {mode === 'result' && analysis && (
           <div className="space-y-4">
@@ -1099,7 +1293,11 @@ export default function DashboardPage() {
             <p className="text-gray-400 text-sm -mt-2">키워드: <span className="text-blue-500 font-medium">{keywordData?.keyword || mainKeyword}</span></p>
             {autoSelectedKeyword && (
               <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm text-blue-700">
-                ✅ <strong>'{autoSelectedKeyword}'</strong>을 타겟 키워드로 선정했어요 (입력한 키워드 중 경쟁강도 가장 낮음)
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-500 border-2 border-blue-500 mr-2 align-middle">
+                  <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span><strong>'{autoSelectedKeyword}'</strong>을 타겟 키워드로 선정했어요 <span className="ml-1 text-xs bg-blue-500 text-white px-2.5 py-1 rounded-full font-medium">🏆 상위노출 최적 키워드</span>
               </div>
             )}
 
@@ -1126,7 +1324,7 @@ export default function DashboardPage() {
 
             {/* 제목 패턴 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-              <p className="text-xs font-semibold text-gray-800">🏷️ 제목 패턴 분석 ({analysis.titleTotal}개)</p>
+              <p className="text-xs font-semibold text-gray-800">🏷️ 제목 패턴 분석</p>
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">평균 제목 길이</p>
@@ -1146,14 +1344,14 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
-              {(analysis.bracketCount > 0 || analysis.numberCount > 0) && (
+              {(analysis.bracketCount >= analysis.titleTotal * 0.3 || analysis.numberCount >= analysis.titleTotal * 0.3) && (
                 <div className="flex gap-3">
-                  {analysis.bracketCount > 0 && (
+                  {analysis.bracketCount >= analysis.titleTotal * 0.3 && (
                     <span className="text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg">
                       [] 대괄호 활용 {analysis.bracketCount}/{analysis.titleTotal}개
                     </span>
                   )}
-                  {analysis.numberCount > 0 && (
+                  {analysis.numberCount >= analysis.titleTotal * 0.3 && (
                     <span className="text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg">
                       숫자 포함 {analysis.numberCount}/{analysis.titleTotal}개
                     </span>
@@ -1248,10 +1446,33 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {/* 작성 스타일 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <p className="text-xs font-semibold text-gray-800 mb-3">📱 작성 스타일</p>
+              <div className="flex flex-wrap gap-2">
+                <span className={`text-xs px-3 py-1 rounded-full font-medium ${analysis.mobileOptPct >= 50 ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                  📱 모바일 최적화 {analysis.mobileOptPct >= 50 ? '권장' : '해당없음'}
+                </span>
+                {analysis.avgImages > 0 && (
+                  <span className="text-xs bg-green-50 text-green-600 px-3 py-1 rounded-full font-medium">
+                    🖼️ 이미지 평균 {analysis.avgImages}장
+                  </span>
+                )}
+                {analysis.avgVideos > 0 && (
+                  <span className="text-xs bg-purple-50 text-purple-600 px-3 py-1 rounded-full font-medium">
+                    🎬 영상 평균 {analysis.avgVideos}개
+                  </span>
+                )}
+                <span className={`text-xs px-3 py-1 rounded-full font-medium ${analysis.avgHeadings > 0 ? 'bg-orange-50 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
+                  📝 소제목 {analysis.avgHeadings > 0 ? `평균 ${analysis.avgHeadings}개 (${analysis.headingNumbered ? '숫자형' : '일반형'})` : '미사용'}
+                </span>
+              </div>
+            </div>
+
             {/* 연관 키워드 */}
             {analysis.relatedKeywords.length > 0 && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-800 mb-3">🔗 연관 키워드 분포 (본문 빈도 기준)</p>
+                <p className="text-xs font-semibold text-gray-800 mb-3">🔗 연관 키워드 분포 <span className="text-gray-400 font-normal">(본문 빈도 기준)</span></p>
                 <div className="flex flex-wrap gap-2">
                   {analysis.relatedKeywords.map((r, i) => (
                     <span key={i} className={`text-xs px-3 py-1 rounded-full font-medium ${
@@ -1269,7 +1490,7 @@ export default function DashboardPage() {
             {analysis.topHashtags.length > 0 && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-gray-800"># 추천 해시태그 (상위노출 글 빈도 기준)</p>
+                  <p className="text-xs font-semibold text-gray-800"># 추천 해시태그</p>
                   <button onClick={copyHashtags}
                     className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
                       hashtagCopied ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1826,22 +2047,20 @@ export default function DashboardPage() {
           <div className="space-y-4">
             <button onClick={resetAll} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold">실시간 인기 뉴스</h2>
-            <p className="text-gray-400 text-sm -mt-2">
-              오늘 가장 많이 읽힌 뉴스로 블로그 글감을 만들어보세요
-              {newsRankingFetchedAt && (
-                <span className="ml-2 text-gray-300">
-                  · {(() => {
-                    const d = new Date(newsRankingFetchedAt)
-                    const yy = d.getFullYear()
-                    const mm = String(d.getMonth() + 1).padStart(2, '0')
-                    const dd = String(d.getDate()).padStart(2, '0')
-                    const hh = String(d.getHours()).padStart(2, '0')
-                    const min = String(d.getMinutes()).padStart(2, '0')
-                    return `${yy}/${mm}/${dd} ${hh}:${min} 기준`
-                  })()}
-                </span>
-              )}
-            </p>
+            <p className="text-gray-400 text-sm -mt-2">오늘 가장 많이 읽힌 뉴스로 블로그 글감을 만들어보세요</p>
+            {newsRankingFetchedAt && (
+              <p className="text-xs text-gray-300 -mt-1">
+                {(() => {
+                  const d = new Date(newsRankingFetchedAt)
+                  const yy = d.getFullYear()
+                  const mm = String(d.getMonth() + 1).padStart(2, '0')
+                  const dd = String(d.getDate()).padStart(2, '0')
+                  const hh = String(d.getHours()).padStart(2, '0')
+                  const min = String(d.getMinutes()).padStart(2, '0')
+                  return `${yy}/${mm}/${dd} ${hh}:${min} 기준`
+                })()}
+              </p>
+            )}
 
             {newsRankingError && <p className="text-red-500 text-sm">{newsRankingError}</p>}
 
