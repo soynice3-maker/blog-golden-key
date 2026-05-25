@@ -2090,20 +2090,21 @@ export default function DashboardPage() {
           <div className="space-y-4">
             <button onClick={resetAll} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold pl-2">실시간 인기 뉴스</h2>
-            <p className="text-gray-400 text-sm -mt-2 pl-2">오늘 가장 많이 읽힌 뉴스로 블로그 글감을 만들어보세요</p>
-            {newsRankingFetchedAt && (
-              <p className="text-xs text-gray-400 -mt-2 pl-2">
-                {(() => {
-                  const d = new Date(newsRankingFetchedAt)
-                  const yy = d.getFullYear()
-                  const mm = String(d.getMonth() + 1).padStart(2, '0')
-                  const dd = String(d.getDate()).padStart(2, '0')
-                  const hh = String(d.getHours()).padStart(2, '0')
-                  const min = String(d.getMinutes()).padStart(2, '0')
-                  return `${yy}/${mm}/${dd} ${hh}:00 기준`
-                })()}
-              </p>
-            )}
+            <div className="flex items-center justify-between -mt-2 pl-2">
+              <p className="text-gray-400 text-sm">오늘 가장 많이 읽힌 뉴스로 블로그 글감을 만들어보세요</p>
+              {newsRankingFetchedAt && (
+                <p className="text-xs text-gray-400 shrink-0 ml-3">
+                  {(() => {
+                    const d = new Date(newsRankingFetchedAt)
+                    const yy = d.getFullYear()
+                    const mm = String(d.getMonth() + 1).padStart(2, '0')
+                    const dd = String(d.getDate()).padStart(2, '0')
+                    const hh = String(d.getHours()).padStart(2, '0')
+                    return `${yy}/${mm}/${dd} ${hh}:00 기준`
+                  })()}
+                </p>
+              )}
+            </div>
 
             {newsRankingError && <p className="text-red-500 text-sm">{newsRankingError}</p>}
 
