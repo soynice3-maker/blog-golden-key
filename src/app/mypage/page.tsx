@@ -59,7 +59,7 @@ export default function MyPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace('/login'); return }
       const m = user.user_metadata
-      setUserEmail(user.email ?? '')
+setUserEmail(user.email ?? '')
       setName(m?.name ?? '')
       setNickname(m?.nickname ?? '')
       setOriginalNickname(m?.nickname ?? '')

@@ -197,11 +197,13 @@ export default function SignupPage() {
     if (Object.keys(newErrors).length > 0) return
 
     setLoading(true)
-    const { error } = await supabase.auth.updateUser({
-      password,
+    const { error: dataError } = await supabase.auth.updateUser({
       data: { name, nickname, gender, birthdate, phone, marketing: agreed['marketing'] ?? false },
     })
-    if (error) setErrors({ submit: error.message })
+    if (dataError) { setErrors({ submit: dataError.message }); setLoading(false); return }
+
+    const { error: pwError } = await supabase.auth.updateUser({ password })
+    if (pwError) setErrors({ submit: pwError.message })
     else setSuccess(true)
     setLoading(false)
   }
