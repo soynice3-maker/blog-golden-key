@@ -130,17 +130,17 @@ export default function LoginPage() {
         {/* 입력 필드 그룹 */}
         {mode === 'findId' ? (
           <div className="mb-4 space-y-2">
-            <div className="border border-gray-300 rounded-xl overflow-hidden">
+            <div className="border border-gray-300 rounded-xl overflow-hidden hover:border-gray-400 focus-within:border-blue-500">
               <input
                 type="text"
                 placeholder="이름"
                 value={findName}
                 onChange={e => setFindName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                className="w-full px-4 py-4 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400"
+                className="w-full px-4 py-4 text-sm focus:outline-none placeholder-gray-400"
               />
             </div>
-            <div className="border border-gray-300 rounded-xl overflow-hidden">
+            <div className="border border-gray-300 rounded-xl overflow-hidden hover:border-gray-400 focus-within:border-blue-500">
               <input
                 type="tel"
                 inputMode="numeric"
@@ -148,19 +148,19 @@ export default function LoginPage() {
                 value={findPhone}
                 onChange={e => setFindPhone(formatPhone(e.target.value))}
                 onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                className="w-full px-4 py-4 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400"
+                className="w-full px-4 py-4 text-sm focus:outline-none placeholder-gray-400"
               />
             </div>
           </div>
         ) : (
-          <div className="border border-gray-300 rounded-xl overflow-hidden mb-4">
+          <div className="border border-gray-300 rounded-xl overflow-hidden mb-4 hover:border-gray-400 focus-within:border-blue-500">
             <input
               type="email"
               placeholder="아이디(이메일)"
               value={email}
               onChange={e => setEmail(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-              className="w-full px-4 py-4 text-sm focus:outline-none focus:bg-blue-50 border-b border-gray-200 placeholder-gray-400"
+              className="w-full px-4 py-4 text-sm focus:outline-none border-b border-gray-200 placeholder-gray-400"
             />
             {mode !== 'findPassword' && (
               <input
@@ -169,7 +169,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                className="w-full px-4 py-4 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400"
+                className="w-full px-4 py-4 text-sm focus:outline-none placeholder-gray-400"
               />
             )}
           </div>

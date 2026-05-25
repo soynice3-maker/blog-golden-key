@@ -241,7 +241,7 @@ export default function SignupPage() {
           <div className="flex items-start gap-2">
             <CheckIcon />
             <div className="flex-1 min-w-0">
-              <div className={`border rounded-xl overflow-hidden focus-within:bg-blue-50 ${errors.id ? 'border-red-400' : otpStatus === 'verified' ? 'border-blue-400' : 'border-gray-300'}`}>
+              <div className={`border rounded-xl overflow-hidden${errors.id ? 'border-red-400' : otpStatus === 'verified' ? 'border-blue-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <div className="flex items-center min-w-0">
                   <input type="text" placeholder="아이디" value={idLocal}
                     disabled={otpStatus === 'sent' || otpStatus === 'verifying' || otpStatus === 'verified'}
@@ -291,7 +291,7 @@ export default function SignupPage() {
               {/* OTP 입력란 */}
               {(otpStatus === 'sent' || otpStatus === 'verifying') && (
                 <div className="mt-2">
-                  <div className={`border rounded-xl overflow-hidden flex items-center focus-within:bg-blue-50 ${otpError ? 'border-red-400' : 'border-gray-300'}`}>
+                  <div className={`border rounded-xl overflow-hidden flex items-center${otpError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                     <input type="text" inputMode="numeric" placeholder="인증번호 입력" value={otpCode} maxLength={8}
                       onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError('') }}
                       className="flex-1 px-4 py-3.5 text-sm focus:outline-none bg-transparent placeholder-gray-400" />
@@ -314,7 +314,7 @@ export default function SignupPage() {
           <div className="flex items-start gap-2">
             <CheckIcon />
             <div className="flex-1">
-              <div className={`border rounded-xl overflow-hidden focus-within:bg-blue-50 ${pwError ? 'border-red-400' : 'border-gray-300'}`}>
+              <div className={`border rounded-xl overflow-hidden${pwError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <div className="flex items-center">
                   <input type={showPw ? 'text' : 'password'} placeholder="비밀번호" value={password}
                     onChange={e => { setPassword(e.target.value); setPwTouched(true) }}
@@ -337,7 +337,7 @@ export default function SignupPage() {
           <div className="flex items-start gap-2">
             <CheckIcon />
             <div className="flex-1">
-              <div className={`border rounded-xl overflow-hidden focus-within:bg-blue-50 ${pwConfirmError ? 'border-red-400' : 'border-gray-300'}`}>
+              <div className={`border rounded-xl overflow-hidden${pwConfirmError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <div className="flex items-center">
                   <input type={showPwConfirm ? 'text' : 'password'} placeholder="비밀번호 확인" value={passwordConfirm}
                     onChange={e => { setPasswordConfirm(e.target.value); setPwConfirmTouched(true) }}
@@ -357,10 +357,10 @@ export default function SignupPage() {
           <div className="flex items-start gap-2">
             <CheckIcon />
             <div className="flex-1">
-              <div className={`border rounded-xl overflow-hidden ${errors.name ? 'border-red-400' : 'border-gray-300'}`}>
+              <div className={`border rounded-xl overflow-hidden ${errors.name ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <input type="text" placeholder="이름" value={name}
                   onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: '' })) }}
-                  className="w-full px-4 py-3.5 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400" />
+                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder-gray-400" />
               </div>
               {errors.name
                 ? <p className="text-xs text-red-500 mt-1 pl-1">• {errors.name}</p>
@@ -378,10 +378,10 @@ export default function SignupPage() {
               <div className="flex items-center justify-end mb-1">
                 <CheckBadge status={nicknameStatus} />
               </div>
-              <div className={`border rounded-xl overflow-hidden ${errors.nickname || nicknameStatus === 'taken' ? 'border-red-400' : nicknameStatus === 'available' ? 'border-blue-400' : 'border-gray-300'}`}>
+              <div className={`border rounded-xl overflow-hidden ${errors.nickname || nicknameStatus === 'taken' ? 'border-red-400' : nicknameStatus === 'available' ? 'border-blue-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <input type="text" placeholder="닉네임" value={nickname}
                   onChange={e => { setNickname(e.target.value); setNicknameStatus('idle'); setErrors(p => ({ ...p, nickname: '' })) }}
-                  className="w-full px-4 py-3.5 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400" />
+                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder-gray-400" />
               </div>
               <button type="button" onClick={checkNickname} disabled={nicknameStatus === 'checking' || nicknameStatus === 'available'}
                 className={`mt-1.5 w-full py-2 rounded-lg text-xs font-medium transition-colors ${nicknameStatus === 'available' ? 'bg-blue-50 text-blue-500 cursor-default' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50'}`}>
@@ -400,10 +400,10 @@ export default function SignupPage() {
           <div className="flex items-start gap-2">
             <CheckIcon />
             <div className="flex-1">
-              <div className={`border rounded-xl overflow-hidden ${(errors.birthdate || (birthdate.length > 0 && birthdate.length < 8)) ? 'border-red-400' : 'border-gray-300'}`}>
+              <div className={`border rounded-xl overflow-hidden ${(errors.birthdate || (birthdate.length > 0 && birthdate.length < 8)) ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <input type="text" inputMode="numeric" placeholder="생년월일 8자리 (예: 19900101)" value={birthdate}
                   onChange={e => { setBirthdate(e.target.value.replace(/\D/g, '').slice(0, 8)); setErrors(p => ({ ...p, birthdate: '' })) }}
-                  className="w-full px-4 py-3.5 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400" />
+                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder-gray-400" />
               </div>
               {(errors.birthdate || (birthdate.length > 0 && birthdate.length < 8)) && (
                 <p className="text-xs text-red-500 mt-1 pl-1">• 숫자 8자리 형식으로 입력해주세요.</p>
@@ -435,10 +435,10 @@ export default function SignupPage() {
           <div className="flex items-start gap-2">
             <CheckIcon />
             <div className="flex-1">
-              <div className={`border rounded-xl overflow-hidden ${errors.phone ? 'border-red-400' : 'border-gray-300'}`}>
+              <div className={`border rounded-xl overflow-hidden ${errors.phone ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <input type="tel" inputMode="numeric" placeholder="휴대전화번호" value={phone}
                   onChange={e => { setPhone(formatPhone(e.target.value)); setErrors(p => ({ ...p, phone: '' })) }}
-                  className="w-full px-4 py-3.5 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400" />
+                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder-gray-400" />
               </div>
               {errors.phone && <p className="text-xs text-red-500 mt-1 pl-1">• {errors.phone}</p>}
             </div>
@@ -449,12 +449,12 @@ export default function SignupPage() {
         <div className="flex items-start gap-2 mb-2">
           <CheckIcon />
           <div className="flex-1 min-w-0">
-            <div className={`border rounded-xl overflow-hidden ${errors.terms ? 'border-red-400' : 'border-gray-300'}`}>
+            <div className={`border rounded-xl overflow-hidden ${errors.terms ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
               <button type="button" onClick={() => setTermsOpen(v => !v)}
                 className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-2">
                   <div onClick={toggleAll}>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${allAgreed ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}`}>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${allAgreed ? 'border-blue-500 bg-blue-500' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                       {allAgreed && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                     </div>
                   </div>

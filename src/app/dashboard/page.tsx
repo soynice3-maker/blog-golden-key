@@ -1140,19 +1140,19 @@ export default function DashboardPage() {
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">작성 주제 <span className="text-red-400">*</span></label>
                 <input type="text" placeholder="예: 문래 라멘 로라멘 후기" value={topic} onChange={e => setTopic(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 placeholder:text-gray-300" />
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
                 <p className="text-xs text-gray-400 mt-1">작성하고 싶은 포스팅 주제를 입력하세요</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">가게·브랜드명 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <input type="text" placeholder="예: 몽밀, 로라멘, 스타벅스"
                   value={brandName} onChange={e => setBrandName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 placeholder:text-gray-300" />
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
                 <p className="text-xs text-gray-400 mt-1">입력하면 내 가게·브랜드에 딱 맞는 분석 결과가 나와요</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">타겟 키워드 <span className="text-red-400">*</span></label>
-                <div className="w-full px-3 py-2 border border-gray-400 rounded-xl text-sm focus-within:border-blue-400 flex flex-wrap gap-2 min-h-[46px] cursor-text"
+                <div className="w-full px-3 py-2 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus-within:border-blue-500 flex flex-wrap gap-2 min-h-[46px] cursor-text"
                   onClick={() => document.getElementById('keyword-input')?.focus()}>
                   {keywords.map((kw, i) => (
                     <span key={i} className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
@@ -1174,7 +1174,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">서브 키워드 <span className="text-gray-400 font-normal">(선택)</span></label>
-                <div className="w-full px-3 py-2 border border-gray-400 rounded-xl text-sm focus-within:border-blue-400 flex flex-wrap gap-2 min-h-[46px] cursor-text"
+                <div className="w-full px-3 py-2 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus-within:border-blue-500 flex flex-wrap gap-2 min-h-[46px] cursor-text"
                   onClick={() => document.getElementById('sub-keyword-input')?.focus()}>
                   {subKeywords.map((kw, i) => (
                     <span key={i} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium">
@@ -1196,7 +1196,7 @@ export default function DashboardPage() {
                 <label className="text-sm font-medium text-gray-700 mb-2 block">참고사항 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <textarea placeholder={`예:\n주차가 협소해서 대중교통 이용 추천\n웨이팅이 있지만 회전율이 빨라서 금방 입장 가능\n떡볶이보다 튀김이 더 맛있었음\n혼밥하기 좋은 1인석 있음`}
                   value={notes} onChange={e => setNotes(e.target.value)} rows={5}
-                  className="w-full px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300" />
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300" />
                 <p className="text-xs text-gray-400 -mt-0.5">포스팅에 담고 싶은 내용이나 경험을 자유롭게 적어주세요</p>
               </div>
               <div>
@@ -1204,7 +1204,7 @@ export default function DashboardPage() {
                 <div className="flex gap-2">
                   <input type="text" placeholder="예: https://map.naver.com/p/... (네이버 플레이스 URL)"
                     value={referenceLink} onChange={e => { setReferenceLink(e.target.value); setPlaceError('') }}
-                    className="flex-1 px-4 py-3 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 placeholder:text-gray-300" />
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
                   <button type="button" onClick={extractPlace} disabled={!referenceLink.trim() || placeLoading}
                     className="px-4 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 disabled:opacity-40 whitespace-nowrap">
                     {placeLoading ? '추출 중...' : '가게정보 불러오기'}
@@ -1295,7 +1295,7 @@ export default function DashboardPage() {
                               onChange={e => setSupplementMap(prev => ({ ...prev, [section.topic]: e.target.value }))}
                               placeholder="이 항목에 대해 작성할 내용을 입력하세요."
                               rows={2}
-                              className="mt-3 w-full px-4 py-2 border border-gray-400 rounded-xl text-sm focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300 bg-white"
+                              className="mt-3 w-full px-4 py-2 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300 bg-white"
                             />
                           )}
                         </div>
@@ -1828,7 +1828,7 @@ export default function DashboardPage() {
                   value={insightKeyword}
                   onChange={e => setInsightKeyword(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && insightKeyword.trim()) startInsight() }}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 placeholder:text-gray-300"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300"
                   autoFocus
                 />
               </div>

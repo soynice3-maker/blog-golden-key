@@ -174,10 +174,10 @@ setUserEmail(user.email ?? '')
           {/* 이름 */}
           <div className="mb-3">
             <label className="text-xs text-gray-500 mb-1 block">이름</label>
-            <div className={`border rounded-xl overflow-hidden ${profileErrors.name ? 'border-red-400' : 'border-gray-300'}`}>
+            <div className={`border rounded-xl overflow-hidden ${profileErrors.name ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
               <input type="text" placeholder="이름" value={name}
                 onChange={e => { setName(e.target.value); setProfileErrors(p => ({ ...p, name: '' })) }}
-                className="w-full px-4 py-3 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400" />
+                className="w-full px-4 py-3 text-sm focus:outline-none placeholder-gray-400" />
             </div>
             {profileErrors.name && <p className="text-xs text-red-500 mt-1 pl-1">• {profileErrors.name}</p>}
           </div>
@@ -185,10 +185,10 @@ setUserEmail(user.email ?? '')
           {/* 닉네임 */}
           <div className="mb-3">
             <label className="text-xs text-gray-500 mb-1 block">닉네임</label>
-            <div className={`border rounded-xl overflow-hidden ${profileErrors.nickname || nicknameStatus === 'taken' ? 'border-red-400' : nicknameStatus === 'available' ? 'border-blue-400' : 'border-gray-300'}`}>
+            <div className={`border rounded-xl overflow-hidden ${profileErrors.nickname || nicknameStatus === 'taken' ? 'border-red-400' : nicknameStatus === 'available' ? 'border-blue-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
               <input type="text" placeholder="닉네임" value={nickname}
                 onChange={e => handleNicknameChange(e.target.value)}
-                className="w-full px-4 py-3 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400" />
+                className="w-full px-4 py-3 text-sm focus:outline-none placeholder-gray-400" />
             </div>
             {nickname !== originalNickname && (
               <button type="button" onClick={checkNickname}
@@ -203,10 +203,10 @@ setUserEmail(user.email ?? '')
           {/* 휴대전화번호 */}
           <div className="mb-3">
             <label className="text-xs text-gray-500 mb-1 block">휴대전화번호</label>
-            <div className={`border rounded-xl overflow-hidden ${profileErrors.phone ? 'border-red-400' : 'border-gray-300'}`}>
+            <div className={`border rounded-xl overflow-hidden ${profileErrors.phone ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
               <input type="tel" inputMode="numeric" placeholder="휴대전화번호" value={phone}
                 onChange={e => { setPhone(formatPhone(e.target.value)); setProfileErrors(p => ({ ...p, phone: '' })) }}
-                className="w-full px-4 py-3 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400" />
+                className="w-full px-4 py-3 text-sm focus:outline-none placeholder-gray-400" />
             </div>
             {profileErrors.phone && <p className="text-xs text-red-500 mt-1 pl-1">• {profileErrors.phone}</p>}
           </div>
@@ -214,10 +214,10 @@ setUserEmail(user.email ?? '')
           {/* 생년월일 */}
           <div className="mb-3">
             <label className="text-xs text-gray-500 mb-1 block">생년월일</label>
-            <div className={`border rounded-xl overflow-hidden ${profileErrors.birthdate ? 'border-red-400' : 'border-gray-300'}`}>
+            <div className={`border rounded-xl overflow-hidden ${profileErrors.birthdate ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
               <input type="text" inputMode="numeric" placeholder="생년월일 8자리 (예: 19900101)" value={birthdate}
                 onChange={e => { setBirthdate(e.target.value.replace(/\D/g, '').slice(0, 8)); setProfileErrors(p => ({ ...p, birthdate: '' })) }}
-                className="w-full px-4 py-3 text-sm focus:outline-none focus:bg-blue-50 placeholder-gray-400" />
+                className="w-full px-4 py-3 text-sm focus:outline-none placeholder-gray-400" />
             </div>
             {profileErrors.birthdate && <p className="text-xs text-red-500 mt-1 pl-1">• {profileErrors.birthdate}</p>}
           </div>
@@ -250,10 +250,10 @@ setUserEmail(user.email ?? '')
 
           <div className="mb-3">
             <label className="text-xs text-gray-500 mb-1 block">새 비밀번호</label>
-            <div className={`border rounded-xl overflow-hidden flex items-center ${newPwValidationError ? 'border-red-400' : 'border-gray-300'}`}>
+            <div className={`border rounded-xl overflow-hidden flex items-center ${newPwValidationError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
               <input type={showNewPw ? 'text' : 'password'} placeholder="새 비밀번호" value={newPw}
                 onChange={e => { setNewPw(e.target.value); setPwTouched(true); setPwError('') }}
-                className="flex-1 px-4 py-3 text-sm focus:outline-none focus:bg-blue-50 bg-transparent placeholder-gray-400" />
+                className="flex-1 px-4 py-3 text-sm focus:outline-none bg-transparent placeholder-gray-400" />
               <button type="button" onClick={() => setShowNewPw(v => !v)} className="pr-4 text-gray-400 hover:text-gray-600">
                 {showNewPw
                   ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -268,10 +268,10 @@ setUserEmail(user.email ?? '')
 
           <div className="mb-5">
             <label className="text-xs text-gray-500 mb-1 block">새 비밀번호 확인</label>
-            <div className={`border rounded-xl overflow-hidden flex items-center ${newPwConfirmError ? 'border-red-400' : 'border-gray-300'}`}>
+            <div className={`border rounded-xl overflow-hidden flex items-center ${newPwConfirmError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
               <input type={showNewPwConfirm ? 'text' : 'password'} placeholder="새 비밀번호 확인" value={newPwConfirm}
                 onChange={e => { setNewPwConfirm(e.target.value); setPwConfirmTouched(true) }}
-                className="flex-1 px-4 py-3 text-sm focus:outline-none focus:bg-blue-50 bg-transparent placeholder-gray-400" />
+                className="flex-1 px-4 py-3 text-sm focus:outline-none bg-transparent placeholder-gray-400" />
               <button type="button" onClick={() => setShowNewPwConfirm(v => !v)} className="pr-4 text-gray-400 hover:text-gray-600">
                 {showNewPwConfirm
                   ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
