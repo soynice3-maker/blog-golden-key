@@ -27,6 +27,12 @@ function formatPhone(value: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
 }
 
+function validateName(name: string): string {
+  if (!name.trim()) return ''
+  if (!/^[가-힣]+$/.test(name)) return '한글을 사용해 주세요. (특수기호, 영문, 공백 사용 불가)'
+  return ''
+}
+
 function validatePassword(pw: string): string {
   if (!pw) return ''
   if (pw.length < 8 || pw.length > 16 || !/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/\d/.test(pw) || !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw))
@@ -73,6 +79,7 @@ export default function SignupPage() {
   const [showPwConfirm, setShowPwConfirm] = useState(false)
 
   const [name, setName] = useState('')
+  const [nameTouched, setNameTouched] = useState(false)
   const [nickname, setNickname] = useState('')
   const [nicknameStatus, setNicknameStatus] = useState<CheckStatus>('idle')
   const [nicknameTouched, setNicknameTouched] = useState(false)
@@ -91,6 +98,7 @@ export default function SignupPage() {
   const pwError = pwTouched ? validatePassword(password) : ''
   const pwConfirmError = pwConfirmTouched && passwordConfirm && password !== passwordConfirm
     ? '비밀번호와 비밀번호 확인이 일치하지 않습니다.' : ''
+  const nameError = nameTouched ? validateName(name) : ''
 
   const getFullEmail = () => `${idLocal}@${domain === 'direct' ? customDomain : domain}`
 
@@ -108,18 +116,21 @@ export default function SignupPage() {
     if (!idLocal || (domain === 'direct' && !customDomain)) {
       setErrors(p => ({ ...p, id: '아이디와 도메인을 입력해 주세요.' })); return
     }
+    const isResend = otpStatus === 'sent'
     setOtpStatus('sending')
     setErrors(p => ({ ...p, id: '' }))
     setOtpError('')
-    try {
-      const res = await fetch('/api/check-id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: getFullEmail() }) })
-      const data = await res.json()
-      if (!data.available) {
-        setErrors(p => ({ ...p, id: data.message }))
-        setOtpStatus('idle')
-        return
-      }
-    } catch { setOtpStatus('idle'); return }
+    if (!isResend) {
+      try {
+        const res = await fetch('/api/check-id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: getFullEmail() }) })
+        const data = await res.json()
+        if (!data.available) {
+          setErrors(p => ({ ...p, id: data.message }))
+          setOtpStatus('idle')
+          return
+        }
+      } catch { setOtpStatus('idle'); return }
+    }
 
     const { error } = await supabase.auth.signInWithOtp({
       email: getFullEmail(),
@@ -174,14 +185,15 @@ export default function SignupPage() {
   }
 
   const handleSignup = async () => {
-    setPwTouched(true); setPwConfirmTouched(true)
+    setPwTouched(true); setPwConfirmTouched(true); setNameTouched(true)
     const newErrors: Record<string, string> = {}
     if (!idLocal) newErrors.id = '아이디는 필수 입력 항목입니다.'
     else if (otpStatus !== 'verified') newErrors.id = '이메일 인증을 완료해주세요.'
     const pwErr = validatePassword(password)
     if (pwErr) newErrors.password = pwErr
     if (password !== passwordConfirm) newErrors.passwordConfirm = '비밀번호와 비밀번호 확인이 일치하지 않습니다.'
-    if (!name) newErrors.name = '이름은 필수 입력 항목입니다.'
+    const nameErr = !name.trim() ? '이름을 입력해 주세요.' : validateName(name)
+    if (nameErr) newErrors.name = nameErr
     if (!nickname) newErrors.nickname = '닉네임은 필수 입력 항목입니다.'
     else if (nicknameStatus !== 'available') newErrors.nickname = '닉네임 중복확인을 완료해주세요.'
     if (birthdate.length > 0 && birthdate.length < 8) newErrors.birthdate = '생년월일 8자리를 입력해 주세요.'
@@ -228,7 +240,7 @@ export default function SignupPage() {
         {/* 아이디 */}
         <div className="mb-3">
           <div className="min-w-0">
-              <div className={`border rounded-xl overflow-hidden ${errors.id ? 'border-red-400' : otpStatus === 'verified' ? 'border-blue-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+              <div className={`border rounded-xl overflow-hidden ${errors.id ? 'border-red-400' : otpStatus === 'verified' ? 'border-blue-400' : 'border-gray-300'}`}>
                 <div className="flex items-center min-w-0">
                   <input type="text" placeholder="아이디" value={idLocal}
                     disabled={otpStatus === 'sent' || otpStatus === 'verifying' || otpStatus === 'verified'}
@@ -278,7 +290,7 @@ export default function SignupPage() {
               {/* OTP 입력란 */}
               {(otpStatus === 'sent' || otpStatus === 'verifying') && (
                 <div className="mt-2">
-                  <div className={`border rounded-xl overflow-hidden flex items-center ${otpError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+                  <div className={`border rounded-xl overflow-hidden flex items-center ${otpError ? 'border-red-400' : 'border-gray-300'}`}>
                     <input type="text" inputMode="numeric" placeholder="인증번호 입력" value={otpCode} maxLength={8}
                       onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError('') }}
                       className="flex-1 px-4 py-3.5 text-sm focus:outline-none bg-transparent placeholder:text-gray-300" />
@@ -287,7 +299,10 @@ export default function SignupPage() {
                       {otpStatus === 'verifying' ? '확인 중...' : '확인'}
                     </button>
                   </div>
-                  {otpError && <p className="text-xs text-red-500 mt-1 pl-1">{otpError}</p>}
+                  {otpError
+                    ? <p className="text-xs text-red-500 mt-1 pl-1">{otpError}</p>
+                    : <p className="text-xs mt-1 pl-1 text-gray-400">인증번호를 입력해 주세요.</p>
+                  }
                 </div>
               )}
 
@@ -298,7 +313,7 @@ export default function SignupPage() {
         {/* 비밀번호 */}
         <div className="mb-3">
           <div className="min-w-0">
-              <div className={`border rounded-xl overflow-hidden w-full ${pwError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+              <div className={`border rounded-xl overflow-hidden w-full ${pwError ? 'border-red-400' : 'border-gray-300'}`}>
                 <div className="flex items-center h-[52px]">
                   <input type={showPw ? 'text' : 'password'} placeholder="비밀번호" value={password}
                     onChange={e => { setPassword(e.target.value); setPwTouched(true) }}
@@ -309,16 +324,14 @@ export default function SignupPage() {
                   </button>
                 </div>
               </div>
-              {pwError
-                ? <p className="text-xs text-red-500 mt-1 pl-1">{pwError}</p>
-                : <p className="text-xs text-gray-400 mt-1 pl-1">8~16자의 영문 대/소문자, 숫자, 특수문자를 사용해 주세요.</p>}
+              <p className={`text-xs mt-1 pl-1 ${pwTouched && password && validatePassword(password) ? 'text-red-500' : 'text-gray-400'}`}>8~16자의 영문 대/소문자, 숫자, 특수문자를 사용해 주세요.</p>
           </div>
         </div>
 
         {/* 비밀번호 확인 */}
         <div className="mb-3">
           <div className="min-w-0">
-              <div className={`border rounded-xl overflow-hidden ${pwConfirmError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+              <div className={`border rounded-xl overflow-hidden ${pwConfirmError ? 'border-red-400' : 'border-gray-300'}`}>
                 <div className="flex items-center h-[52px]">
                   <input type={showPwConfirm ? 'text' : 'password'} placeholder="비밀번호 확인" value={passwordConfirm}
                     onChange={e => { setPasswordConfirm(e.target.value); setPwConfirmTouched(true) }}
@@ -328,9 +341,10 @@ export default function SignupPage() {
                   </button>
                 </div>
               </div>
-              {pwConfirmError
-                ? <p className="text-xs text-red-500 mt-1 pl-1">{pwConfirmError}</p>
-                : <p className="text-xs text-gray-400 mt-1 pl-1">비밀번호를 한 번 더 입력해 주세요.</p>}
+              {pwConfirmTouched && passwordConfirm && password !== passwordConfirm
+                ? <p className="text-xs text-red-500 mt-1 pl-1">위 비밀번호와 일치하지 않습니다.</p>
+                : <p className="text-xs mt-1 pl-1 text-gray-400">비밀번호를 한 번 더 입력해 주세요.</p>
+              }
           </div>
         </div>
 
@@ -339,15 +353,12 @@ export default function SignupPage() {
         {/* 이름 */}
         <div className="mb-2">
           <div className="min-w-0">
-              <div className={`border rounded-xl overflow-hidden ${errors.name ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+              <div className={`border rounded-xl overflow-hidden ${(nameTouched && nameError) || errors.name ? 'border-red-400' : 'border-gray-300'}`}>
                 <input type="text" placeholder="이름" value={name}
-                  onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: '' })) }}
+                  onChange={e => { setName(e.target.value); setNameTouched(true); setErrors(p => ({ ...p, name: '' })) }}
                   className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder:text-gray-300" />
               </div>
-              {errors.name
-                ? <p className="text-xs text-red-500 mt-1 pl-1">{errors.name}</p>
-                : <p className="text-xs text-gray-400 mt-1 pl-1">실명으로 입력해 주세요.</p>
-              }
+              <p className={`text-xs mt-1 pl-1 ${(nameTouched && validateName(name)) || errors.name ? 'text-red-500' : 'text-gray-400'}`}>한글을 사용해 주세요. (특수기호, 영문, 공백 사용 불가)</p>
           </div>
         </div>
 
@@ -359,7 +370,7 @@ export default function SignupPage() {
                   <CheckBadge status={nicknameStatus} />
                 </div>
               )}
-              <div className={`border rounded-xl overflow-hidden ${errors.nickname || nicknameStatus === 'taken' || (nicknameTouched && nicknameStatus !== 'available') ? 'border-red-400' : nicknameStatus === 'available' ? 'border-blue-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+              <div className={`border rounded-xl overflow-hidden ${errors.nickname || nicknameStatus === 'taken' || (nicknameTouched && nicknameStatus !== 'available') ? 'border-red-400' : nicknameStatus === 'available' ? 'border-blue-400' : 'border-gray-300'}`}>
                 <input type="text" placeholder="닉네임" value={nickname}
                   onChange={e => { setNickname(e.target.value); setNicknameStatus('idle'); setNicknameTouched(true); setErrors(p => ({ ...p, nickname: '' })) }}
                   className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder:text-gray-300" />
@@ -370,8 +381,8 @@ export default function SignupPage() {
               </button>
               {errors.nickname
                 ? <p className="text-xs text-red-500 mt-1 pl-1">{errors.nickname}</p>
-                : nicknameTouched && nicknameStatus !== 'available'
-                  ? <p className="text-xs text-red-500 mt-1 pl-1">중복확인이 필요해요</p>
+                : nickname && nicknameStatus !== 'available'
+                  ? <p className="text-xs text-red-500 mt-1 pl-1">중복확인이 필요해요.</p>
                   : <p className="text-xs text-gray-400 mt-1 pl-1">서비스에 표시될 이름이에요.</p>
               }
           </div>
@@ -380,14 +391,12 @@ export default function SignupPage() {
         {/* 생년월일 */}
         <div className="mb-3">
           <div className="min-w-0">
-              <div className={`border rounded-xl overflow-hidden ${(errors.birthdate || (birthdate.length > 0 && birthdate.length < 8)) ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+              <div className={`border rounded-xl overflow-hidden ${(errors.birthdate || (birthdate.length > 0 && birthdate.length < 8)) ? 'border-red-400' : 'border-gray-300'}`}>
                 <input type="text" inputMode="numeric" placeholder="생년월일 8자리 (예: 19900101)" value={birthdate}
                   onChange={e => { setBirthdate(e.target.value.replace(/\D/g, '').slice(0, 8)); setErrors(p => ({ ...p, birthdate: '' })) }}
                   className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder:text-gray-300" />
               </div>
-              {(errors.birthdate || (birthdate.length > 0 && birthdate.length < 8)) && (
-                <p className="text-xs text-red-500 mt-1 pl-1">숫자 8자리 형식으로 입력해 주세요.</p>
-              )}
+              <p className={`text-xs mt-1 pl-1 ${(birthdate.length > 0 && birthdate.length < 8) || errors.birthdate ? 'text-red-500' : 'text-gray-400'}`}>숫자 8자리를 입력해 주세요. (예: 19900101)</p>
           </div>
         </div>
 
@@ -397,12 +406,12 @@ export default function SignupPage() {
               <div className="flex gap-2">
                 {(['M', 'F'] as const).map(g => (
                   <button key={g} type="button" onClick={() => { setGender(g); setErrors(p => ({ ...p, gender: '' })) }}
-                    className={`flex-1 py-3 rounded-xl text-sm font-medium border transition-colors ${gender === g ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-300 text-gray-500 hover:border-gray-400'}`}>
+                    className={`flex-1 py-3 rounded-xl text-sm font-medium border transition-colors ${gender === g ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-300 text-gray-500'}`}>
                     {g === 'M' ? '남자' : '여자'}
                   </button>
                 ))}
               </div>
-              {errors.gender && <p className="text-xs text-red-500 mt-1 pl-1">{errors.gender}</p>}
+              <p className={`text-xs mt-1 pl-1 ${errors.gender ? 'text-red-500' : 'text-gray-400'}`}>성별을 선택해 주세요.</p>
           </div>
         </div>
 
@@ -411,24 +420,23 @@ export default function SignupPage() {
         {/* 휴대전화번호 (필수) */}
         <div className="mb-3">
           <div className="min-w-0">
-              <div className={`border rounded-xl overflow-hidden ${errors.phone ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+              <div className={`border rounded-xl overflow-hidden ${errors.phone ? 'border-red-400' : 'border-gray-300'}`}>
                 <input type="tel" inputMode="numeric" placeholder="휴대전화번호" value={phone}
                   onChange={e => { setPhone(formatPhone(e.target.value)); setErrors(p => ({ ...p, phone: '' })) }}
                   className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder:text-gray-300" />
               </div>
-              {errors.phone && <p className="text-xs text-red-500 mt-1 pl-1">{errors.phone}</p>}
           </div>
         </div>
 
         {/* 약관 동의 */}
         <div className="mb-2">
           <div className="min-w-0">
-            <div className={`border rounded-xl overflow-hidden ${errors.terms ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+            <div className={`border rounded-xl overflow-hidden ${errors.terms ? 'border-red-400' : 'border-gray-300'}`}>
               <button type="button" onClick={() => setTermsOpen(v => !v)}
                 className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-2">
                   <div onClick={toggleAll}>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${allAgreed ? 'border-blue-500 bg-blue-500' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${allAgreed ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}`}>
                       {allAgreed && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                     </div>
                   </div>
