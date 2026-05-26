@@ -396,7 +396,6 @@ export default function SignupPage() {
                   onChange={e => { setBirthdate(e.target.value.replace(/\D/g, '').slice(0, 8)); setErrors(p => ({ ...p, birthdate: '' })) }}
                   className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder:text-gray-300" />
               </div>
-              <p className={`text-xs mt-1 pl-1 ${(birthdate.length > 0 && birthdate.length < 8) || errors.birthdate ? 'text-red-500' : 'text-gray-400'}`}>숫자 8자리를 입력해 주세요. (예: 19900101)</p>
           </div>
         </div>
 
@@ -406,12 +405,11 @@ export default function SignupPage() {
               <div className="flex gap-2">
                 {(['M', 'F'] as const).map(g => (
                   <button key={g} type="button" onClick={() => { setGender(g); setErrors(p => ({ ...p, gender: '' })) }}
-                    className={`flex-1 py-3 rounded-xl text-sm font-medium border transition-colors ${gender === g ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-300 text-gray-500'}`}>
+                    className={`flex-1 py-3 rounded-xl text-sm font-medium border transition-colors ${gender === g ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:bg-gray-50'}`}>
                     {g === 'M' ? '남자' : '여자'}
                   </button>
                 ))}
               </div>
-              <p className={`text-xs mt-1 pl-1 ${errors.gender ? 'text-red-500' : 'text-gray-400'}`}>성별을 선택해 주세요.</p>
           </div>
         </div>
 
