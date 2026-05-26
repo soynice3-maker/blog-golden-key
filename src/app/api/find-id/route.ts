@@ -13,7 +13,7 @@ function maskEmail(email: string): string {
 export async function POST(req: Request) {
   const { name, phone } = await req.json()
   if (!name || !phone) {
-    return NextResponse.json({ found: false, message: '이름과 휴대전화번호를 입력해주세요.' })
+    return NextResponse.json({ found: false, message: '이름과 휴대전화번호를 입력해 주세요.' })
   }
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY

@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { Wand2, BarChart2, Trophy, TrendingUp, Newspaper, Key, Tag, FileText, Smartphone, Link2, Hash, Lightbulb, PenLine, Copy, Flame, RefreshCw, Zap, Search, Calendar, Pencil, Plane, Shirt, Sparkles, Utensils, Monitor, Car, Home, Baby, Heart, Gamepad2, PawPrint, Dumbbell, Tv, Film, BookOpen, Briefcase, GraduationCap, type LucideIcon } from 'lucide-react'
+import { BarChart2, Trophy, TrendingUp, Newspaper, Key, Tag, FileText, Smartphone, Link2, Hash, Lightbulb, PenLine, Copy, Flame, RefreshCw, Zap, Search, Calendar, Pencil, Plane, Shirt, Sparkles, Utensils, Monitor, Car, Home, Baby, Heart, Gamepad2, PawPrint, Dumbbell, Tv, Film, BookOpen, Briefcase, GraduationCap, User, LogOut, ChevronRight, Info, type LucideIcon } from 'lucide-react'
+
+const WordCloud = dynamic(() => import('react-d3-cloud'), { ssr: false })
 
 interface KeywordResult {
   keyword: string
@@ -72,7 +75,7 @@ interface ShortentsIdea {
 
 const CATEGORIES: { id: string; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'travel', label: '여행', icon: Plane, color: 'text-sky-400' },
-  { id: 'fashion', label: '패션', icon: Shirt, color: 'text-pink-400' },
+  { id: 'fashion', label: '패션', icon: Shirt, color: 'text-gray-700' },
   { id: 'beauty', label: '뷰티', icon: Sparkles, color: 'text-rose-400' },
   { id: 'food', label: '푸드', icon: Utensils, color: 'text-orange-400' },
   { id: 'tech_it', label: 'IT테크', icon: Monitor, color: 'text-blue-400' },
@@ -567,40 +570,11 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [mode, setMode] = useState<'home' | 'write-input' | 'analyzing' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result'>('home')
-  const HERO_TITLES = ['블로그 상위노출, 여기서 시작하세요!', '상위노출, 운이 아니라 전략입니다.']
-  const [typedTitle, setTypedTitle] = useState('')
-  const [titleDone, setTitleDone] = useState(false)
-  useEffect(() => {
-    if (mode !== 'home') return
-    let cancelled = false
-    let phraseIdx = 0
-    const run = async () => {
-      while (!cancelled) {
-        const phrase = HERO_TITLES[phraseIdx % HERO_TITLES.length]
-        // 타이핑
-        for (let i = 1; i <= phrase.length; i++) {
-          if (cancelled) return
-          setTypedTitle(phrase.slice(0, i))
-          setTitleDone(false)
-          await new Promise(r => setTimeout(r, 60))
-        }
-        setTitleDone(true)
-        await new Promise(r => setTimeout(r, 1800))
-        // 지우기
-        for (let i = phrase.length - 1; i >= 0; i--) {
-          if (cancelled) return
-          setTypedTitle(phrase.slice(0, i))
-          setTitleDone(false)
-          await new Promise(r => setTimeout(r, 30))
-        }
-        await new Promise(r => setTimeout(r, 300))
-        phraseIdx++
-      }
-    }
-    run()
-    return () => { cancelled = true }
-  }, [mode])
+  const [mode, setMode] = useState<'write-input' | 'analyzing' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result' | 'feed-input' | 'feed-loading' | 'feed-result' | 'search-trend-category' | 'search-trend-loading' | 'search-trend-result'>('keyword-insight-input')
+  const [activeTab, setActiveTab] = useState<'keyword' | 'content' | 'prompt'>('keyword')
+  const [activeSubTab, setActiveSubTab] = useState<'insight' | 'golden' | 'trend' | 'news' | 'search-trend'>('insight')
+  const [promptSubTab, setPromptSubTab] = useState<'search' | 'feed'>('search')
+  const [writeMode, setWriteMode] = useState<'search' | 'feed'>('search')
 
   const [topic, setTopic] = useState('')
   const [brandName, setBrandName] = useState('')
@@ -641,21 +615,34 @@ export default function DashboardPage() {
 
   // trend & issue state
   const [trendCategory, setTrendCategory] = useState('')
-  const [trendTab, setTrendTab] = useState<'issue' | 'trend'>('issue')
-  const [trendKeywords, setTrendKeywords] = useState<{ keyword: string; ratio: number; rank: number }[]>([])
   const [trendError, setTrendError] = useState('')
-  const [trendExpandedKeyword, setTrendExpandedKeyword] = useState<string | null>(null)
-  const [trendIdeasMap, setTrendIdeasMap] = useState<Record<string, KeywordIdea[] | 'loading' | string>>({})
   const [issueTitles, setIssueTitles] = useState<string[]>([])
   const [issueError, setIssueError] = useState('')
   const [issueExpandedTopic, setIssueExpandedTopic] = useState<string | null>(null)
   const [issueIdeasMap, setIssueIdeasMap] = useState<Record<string, ShortentsIdea[] | 'loading' | string>>({})
 
+  const [searchTrendCategory, setSearchTrendCategory] = useState('')
+  const [searchTrendKeywords, setSearchTrendKeywords] = useState<{ keyword: string; ratio: number; rank: number }[]>([])
+  const [searchTrendError, setSearchTrendError] = useState('')
+  const [writeTooltipPos, setWriteTooltipPos] = useState<{x: number, y: number} | null>(null)
+  const [trendBadgeTooltipPos, setTrendBadgeTooltipPos] = useState<{x: number, y: number} | null>(null)
+  const writeTooltipRef = useRef<HTMLSpanElement>(null)
+
   // news ranking state
-  const [newsRankingItems, setNewsRankingItems] = useState<string[]>([])
+  const [newsRankingItems, setNewsRankingItems] = useState<{ title: string; url: string }[]>([])
   const [newsRankingFetchedAt, setNewsRankingFetchedAt] = useState<string | null>(null)
   const [newsRankingError, setNewsRankingError] = useState('')
   const [newsIdeasMap, setNewsIdeasMap] = useState<Record<string, ShortentsIdea[] | 'loading' | 'error'>>({})
+
+  // 노출형 프롬프트 state
+  const [feedTopic, setFeedTopic] = useState('')
+  const [feedSnippet, setFeedSnippet] = useState('')
+  const [feedSnippetLoading, setFeedSnippetLoading] = useState(false)
+  const [feedNotes, setFeedNotes] = useState('')
+  const [feedPrompt, setFeedPrompt] = useState('')
+  const [feedError, setFeedError] = useState('')
+  const [feedCopied, setFeedCopied] = useState(false)
+  const [feedOrigin, setFeedOrigin] = useState<'news' | 'tab'>('tab')
   const [newsExpandedItem, setNewsExpandedItem] = useState<string | null>(null)
 
   // supplement-input state
@@ -664,6 +651,9 @@ export default function DashboardPage() {
   const [supplementMap, setSupplementMap] = useState<Record<string, string>>({})
   const [savedKeyword, setSavedKeyword] = useState('')
   const [savedSubKws, setSavedSubKws] = useState('')
+
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const router = useRouter()
   const supabase = createClient()
@@ -675,20 +665,17 @@ export default function DashboardPage() {
       else setUser(user)
       setLoading(false)
     })
-    const handlePopState = () => {
-      setMode('home')
-      resetAll()
-    }
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
-  // home이 아닌 모드로 진입할 때 히스토리 쌓기 → 뒤로가기 시 home으로 복귀
   useEffect(() => {
-    if (mode !== 'home') {
-      window.history.pushState(null, '', '/dashboard')
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
     }
-  }, [mode])
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const resetAll = () => {
     setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
@@ -697,11 +684,14 @@ export default function DashboardPage() {
     setCopied(false); setHashtagCopied(false)
     setInsightKeyword(''); setInsightData(null); setInsightError('')
     setGoldenCategory(''); setGoldenResults([]); setGoldenHasMore(false); setGoldenOffset(0); setGoldenError(''); setExpandedKeyword(null)
-    setTrendCategory(''); setTrendTab('issue'); setTrendKeywords([]); setTrendError(''); setTrendExpandedKeyword(null); setTrendIdeasMap({})
+    setTrendCategory(''); setTrendError('')
     setIssueTitles([]); setIssueError(''); setIssueExpandedTopic(null); setIssueIdeasMap({})
+    setSearchTrendCategory(''); setSearchTrendKeywords([]); setSearchTrendError('')
     setNewsRankingItems([]); setNewsRankingFetchedAt(null); setNewsRankingError(''); setNewsIdeasMap({}); setNewsExpandedItem(null)
     setCommonSections([]); setSectionsLoading(false); setSupplementMap({}); setSavedKeyword(''); setSavedSubKws('')
-    setMode('home')
+    setActiveTab('keyword')
+    setActiveSubTab('insight')
+    setMode('keyword-insight-input')
   }
 
   const isCoveredInNotes = (sectionTopic: string): boolean => {
@@ -797,56 +787,38 @@ export default function DashboardPage() {
 
   const startTrend = async (category: string) => {
     setTrendCategory(category)
-    setTrendTab('issue')
-    setTrendKeywords([])
     setTrendError('')
-    setTrendExpandedKeyword(null)
-    setTrendIdeasMap({})
     setIssueTitles([])
     setIssueError('')
     setIssueExpandedTopic(null)
     setIssueIdeasMap({})
     setMode('trend-loading')
 
-    const [trendRes, issueRes] = await Promise.allSettled([
-      fetch(`/api/trend-keywords?category=${category}`).then(r => r.json()),
-      fetch(`/api/shortents-topics?category=${category}`).then(r => r.json()),
-    ])
-
-    if (trendRes.status === 'fulfilled') {
-      if (trendRes.value.error) setTrendError(trendRes.value.error)
-      else setTrendKeywords(trendRes.value.keywords || [])
-    } else {
-      setTrendError('트렌드 데이터를 불러오지 못했습니다.')
-    }
-
-    if (issueRes.status === 'fulfilled') {
-      setIssueTitles(issueRes.value.shortentsTitles || [])
-    } else {
+    try {
+      const res = await fetch(`/api/shortents-topics?category=${category}`)
+      const data = await res.json()
+      setIssueTitles(data.shortentsTitles || [])
+    } catch {
       setIssueError('이슈 데이터를 불러오지 못했습니다.')
     }
 
     setMode('trend-result')
   }
 
-  const toggleTrendKeyword = async (keyword: string) => {
-    if (trendExpandedKeyword === keyword) { setTrendExpandedKeyword(null); return }
-    setTrendExpandedKeyword(keyword)
-    if (trendIdeasMap[keyword]) return
-
-    setTrendIdeasMap(prev => ({ ...prev, [keyword]: 'loading' }))
+  const startSearchTrend = async (category: string) => {
+    setSearchTrendCategory(category)
+    setSearchTrendKeywords([])
+    setSearchTrendError('')
+    setMode('search-trend-loading')
     try {
-      const res = await fetch('/api/keyword-ideas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword, category: trendCategory }),
-      })
+      const res = await fetch(`/api/trend-keywords?category=${category}`)
       const data = await res.json()
-      if (!res.ok) setTrendIdeasMap(prev => ({ ...prev, [keyword]: data.error || 'error' }))
-      else setTrendIdeasMap(prev => ({ ...prev, [keyword]: data.ideas }))
+      if (data.error) setSearchTrendError(data.error)
+      else setSearchTrendKeywords(data.keywords || [])
     } catch {
-      setTrendIdeasMap(prev => ({ ...prev, [keyword]: 'error' }))
+      setSearchTrendError('트렌드 데이터를 불러오지 못했습니다.')
     }
+    setMode('search-trend-result')
   }
 
   const generateIssueIdea = async (topic: string) => {
@@ -888,6 +860,96 @@ export default function DashboardPage() {
       setNewsRankingError('서버에 연결할 수 없습니다.')
     }
     setMode('news-result')
+  }
+
+  const switchTab = (tab: 'keyword' | 'content' | 'prompt') => {
+    setActiveTab(tab)
+    if (tab === 'keyword') {
+      setActiveSubTab('insight')
+      setInsightKeyword(''); setInsightData(null); setInsightError('')
+      setMode('keyword-insight-input')
+    } else if (tab === 'content') {
+      setActiveSubTab('trend')
+      setTrendCategory(''); setTrendError('')
+      setIssueTitles([]); setIssueError(''); setIssueExpandedTopic(null); setIssueIdeasMap({})
+      setMode('trend-category')
+    } else {
+      setPromptSubTab('search')
+      setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
+      setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setAutoSelectedKeyword('')
+      setError(''); setPlaceError('')
+      setCommonSections([]); setSectionsLoading(false); setSupplementMap({}); setSavedKeyword(''); setSavedSubKws('')
+      setMode('write-input')
+    }
+  }
+
+  const goToFeed = async (title: string) => {
+    setActiveTab('prompt')
+    setPromptSubTab('feed')
+    setFeedOrigin('news')
+    setFeedTopic(title)
+    setFeedSnippet('')
+    setFeedNotes('')
+    setFeedPrompt('')
+    setFeedError('')
+    setFeedCopied(false)
+    setMode('feed-input')
+    setFeedSnippetLoading(true)
+    try {
+      const res = await fetch(`/api/news-snippet?q=${encodeURIComponent(title)}`)
+      const data = await res.json()
+      if (data.snippet) setFeedSnippet(data.snippet)
+    } catch {}
+    setFeedSnippetLoading(false)
+  }
+
+  const generateFeedPrompt = async () => {
+    if (!feedTopic.trim()) return
+    setMode('feed-loading')
+    setFeedError('')
+    try {
+      const res = await fetch('/api/feed-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: feedTopic, snippet: feedSnippet, notes: feedNotes }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setFeedError(data.error || '오류가 발생했습니다'); setMode('feed-input') }
+      else { setFeedPrompt(data.prompt); setMode('feed-result') }
+    } catch {
+      setFeedError('오류가 발생했습니다')
+      setMode('feed-input')
+    }
+  }
+
+  const goToWrite = (title: string, kws: string[]) => {
+    setActiveTab('prompt')
+    setPromptSubTab('search')
+    setTopic(title); setBrandName(''); setKeywords(kws.slice(0, 3)); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
+    setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setAutoSelectedKeyword('')
+    setError(''); setPlaceError('')
+    setCommonSections([]); setSectionsLoading(false); setSupplementMap({}); setSavedKeyword(''); setSavedSubKws('')
+    setMode('write-input')
+  }
+
+  const switchSubTab = (subTab: 'insight' | 'golden' | 'trend' | 'news' | 'search-trend') => {
+    setActiveSubTab(subTab)
+    if (subTab === 'insight') {
+      setInsightKeyword(''); setInsightData(null); setInsightError('')
+      setMode('keyword-insight-input')
+    } else if (subTab === 'golden') {
+      setGoldenCategory(''); setGoldenResults([]); setGoldenHasMore(false); setGoldenOffset(0); setGoldenError(''); setExpandedKeyword(null); setIdeasMap({})
+      setMode('golden-category')
+    } else if (subTab === 'trend') {
+      setTrendCategory(''); setTrendError('')
+      setIssueTitles([]); setIssueError(''); setIssueExpandedTopic(null); setIssueIdeasMap({})
+      setMode('trend-category')
+    } else if (subTab === 'search-trend') {
+      setSearchTrendCategory(''); setSearchTrendKeywords([]); setSearchTrendError('')
+      setMode('search-trend-category')
+    } else {
+      startNewsRanking()
+    }
   }
 
   const generateNewsIdea = async (item: string) => {
@@ -972,8 +1034,8 @@ export default function DashboardPage() {
 
   const startAnalysis = async () => {
     const allKws = keywordInput.trim() ? [...keywords, keywordInput.trim()] : [...keywords]
-    if (!topic.trim()) { setError('작성 주제를 입력해주세요'); return }
-    if (allKws.length === 0) { setError('타겟 키워드를 입력해주세요'); return }
+    if (!topic.trim()) { setError('작성 주제를 입력해 주세요'); return }
+    if (allKws.length === 0) { setError('타겟 키워드를 입력해 주세요'); return }
     if (keywordInput.trim()) addKeyword(keywordInput)
     setMode('analyzing')
     setError('')
@@ -1078,63 +1140,192 @@ export default function DashboardPage() {
   if (!mounted || loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">로딩 중...</div>
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-        <div className="font-bold text-lg cursor-pointer flex items-center gap-1.5" onClick={resetAll}>블로그황금키 <Key className="w-4 h-4 text-yellow-400" /></div>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-gray-500">{user?.email}</span>
-          <a href="/mypage" className="text-gray-400 hover:text-gray-600">마이페이지</a>
-          <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }} className="text-gray-400 hover:text-gray-600">로그아웃</button>
+    <div className="min-h-screen bg-white">
+      {/* 트렌드 배지 툴팁 */}
+      {trendBadgeTooltipPos && (
+        <div
+          className="fixed z-[9999] bg-gray-800/85 text-white rounded-lg px-3 py-2 pointer-events-none -translate-y-1/2 whitespace-nowrap"
+          style={{ left: trendBadgeTooltipPos.x, top: trendBadgeTooltipPos.y, fontSize: '10px' }}
+        >
+          <div className="absolute -left-[4px] top-1/2 -translate-y-1/2 w-0 h-0" style={{ borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '5px solid rgba(31,41,55,0.85)' }} />
+          최근 검색량이 급상승 중인 키워드예요
+        </div>
+      )}
+      {/* 글쓰기 헤더 툴팁 (fixed, overflow 컨테이너 탈출) */}
+      {writeTooltipPos && (
+        <div
+          className="fixed z-[9999] w-56 bg-gray-800/85 text-white text-xs rounded-lg px-3 py-2 pointer-events-none -translate-y-1/2 leading-relaxed"
+          style={{ left: writeTooltipPos.x, top: writeTooltipPos.y }}
+        >
+          <div className="absolute -left-[4px] top-1/2 -translate-y-1/2 w-0 h-0" style={{ borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '5px solid rgba(31,41,55,0.85)' }} />
+          <p className="mb-1.5"><span className="font-semibold text-blue-300">검색형</span> 키워드 중심 제목으로 네이버 검색 상위노출에 최적화된 글쓰기</p>
+          <p><span className="font-semibold text-orange-300">노출형</span> 클릭을 유도하는 제목으로 홈피드 노출에 최적화된 글쓰기</p>
+        </div>
+      )}
+      {/* ── 헤더 + Lv1 탭 (같은 줄) ── */}
+      <header className="bg-white border-b border-gray-200 px-6 flex items-stretch">
+        <div className="flex-1 flex items-center">
+          <div className="font-bold text-lg cursor-pointer flex items-center gap-1.5" onClick={resetAll}>블로그황금키 <Key className="w-4 h-4 text-yellow-400" /></div>
+        </div>
+        <div className="flex gap-10">
+          {(['keyword', 'content', 'prompt'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => switchTab(tab)}
+              className={`py-4 text-sm transition-all ${
+                activeTab === tab
+                  ? 'font-bold text-gray-900'
+                  : 'font-medium text-gray-500 hover:font-bold hover:text-gray-800'
+              }`}
+            >
+              {tab === 'keyword' ? '키워드' : tab === 'content' ? '글감' : '프롬프트'}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 flex items-center justify-end">
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen(prev => !prev)}
+              className="flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors"
+            >
+              <User className="w-5 h-5" />
+            </button>
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden z-50">
+                <div className="px-4 py-3 flex items-center gap-3">
+                  <User className="w-5 h-5 text-gray-400 shrink-0" />
+                  <span className="text-sm font-medium text-gray-800 truncate">
+                    {user?.user_metadata?.nickname || user?.user_metadata?.name || user?.email}
+                  </span>
+                </div>
+                <div className="h-px bg-gray-100" />
+                <a
+                  href="/mypage"
+                  onClick={() => setDropdownOpen(false)}
+                  className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  마이페이지
+                </a>
+                <div className="h-px bg-gray-100" />
+                <button
+                  onClick={async () => { setDropdownOpen(false); await supabase.auth.signOut(); router.push('/') }}
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <div className="text-left">
+                    <p>로그아웃</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{user?.email}</p>
+                  </div>
+                  <LogOut className="w-4 h-4 text-gray-400 shrink-0" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
+      {/* Lv2: 회색 배경 밴드 */}
+      <div className="bg-gray-50 border-b border-gray-200">
+        <div className="max-w-3xl mx-auto px-6">
+          <div className="flex justify-center gap-8">
+            {activeTab === 'keyword' && (
+              <>
+                <button onClick={() => switchSubTab('insight')} className={`py-3 text-sm transition-all ${activeSubTab === 'insight' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>키워드 인사이트</button>
+                <button onClick={() => switchSubTab('golden')} className={`py-3 text-sm transition-all ${activeSubTab === 'golden' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>황금키워드 발굴</button>
+              </>
+            )}
+            {activeTab === 'content' && (
+              <>
+                <button onClick={() => switchSubTab('trend')} className={`py-3 text-sm transition-all ${activeSubTab === 'trend' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>트렌드·이슈</button>
+                <button onClick={() => switchSubTab('news')} className={`py-3 text-sm transition-all ${activeSubTab === 'news' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>실시간 뉴스</button>
+                <button onClick={() => switchSubTab('search-trend')} className={`py-3 text-sm transition-all ${activeSubTab === 'search-trend' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>검색 트렌드</button>
+              </>
+            )}
+            {activeTab === 'prompt' && (
+              <>
+                <button onClick={() => { setPromptSubTab('search'); setMode('write-input') }} className={`py-3 text-sm transition-all ${promptSubTab === 'search' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>검색형</button>
+                <button onClick={() => { setPromptSubTab('feed'); setFeedOrigin('tab'); setMode('feed-input') }} className={`py-3 text-sm transition-all ${promptSubTab === 'feed' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>노출형</button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
 
-      <main className="max-w-2xl mx-auto px-6 py-10">
+      <main className="max-w-3xl mx-auto px-6 py-10">
 
-        {/* ── home ── */}
-        {mode === 'home' && (
-          <>
-            <h2 className="text-3xl font-extrabold mb-2 text-center">
-              {typedTitle}
-              {!titleDone && <span className="inline-block w-0.5 h-7 bg-gray-800 align-middle ml-0.5 animate-pulse" />}
-            </h2>
-            <p className="text-gray-400 text-sm mb-8 text-center">키워드만 입력하면 상위노출에 최적화된 글을 바로 쓸 수 있어요</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <button onClick={() => setMode('write-input')} className="bg-white border-2 border-gray-100 hover:border-blue-400 p-6 rounded-2xl text-left transition-all duration-200 group hover:-translate-y-1 hover:shadow-lg hover:bg-blue-50 flex flex-col">
-                <Wand2 className="w-7 h-7 text-blue-400 group-hover:text-blue-500 mb-4" />
-                <h3 className="font-bold mb-1.5 group-hover:text-blue-500">글쓰기 프롬프트 자동 생성</h3>
-                <p className="text-gray-400 text-sm leading-snug">키워드에 맞는 최적화 프롬프트를 바로 만들어드려요</p>
-              </button>
-              <button onClick={() => setMode('keyword-insight-input')} className="bg-white border-2 border-gray-100 hover:border-blue-400 p-6 rounded-2xl text-left transition-all duration-200 group hover:-translate-y-1 hover:shadow-lg hover:bg-blue-50 flex flex-col">
-                <BarChart2 className="w-7 h-7 text-blue-400 group-hover:text-blue-500 mb-4" />
-                <h3 className="font-bold mb-1.5 group-hover:text-blue-500">키워드 인사이트</h3>
-                <p className="text-gray-400 text-sm leading-snug">검색량·블로그수·경쟁강도를 한눈에 비교하고 최적의 키워드를 찾아보세요</p>
+        {/* ── feed-input ── */}
+        {mode === 'feed-input' && (
+          <div>
+            {feedOrigin === 'news' && (
+              <button onClick={() => { setActiveTab('content'); setActiveSubTab('news'); setMode('news-result') }} className="text-gray-400 text-sm hover:text-gray-600 mb-4 block">← 뒤로</button>
+            )}
+            <h2 className="text-xl font-bold mb-2 pl-2">노출형 프롬프트 생성</h2>
+            <p className="text-gray-400 text-sm mb-6 pl-2">홈피드 알고리즘에 최적화된 글쓰기 프롬프트를 만들어드려요</p>
+            <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">작성 주제 <span className="text-red-400">*</span></label>
+                <input type="text" placeholder="예: 스타벅스 충전금 환불 논란" value={feedTopic} onChange={e => setFeedTopic(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">뉴스 내용 요약 <span className="text-gray-400 font-normal">(자동입력 · 수정 가능)</span></label>
+                {feedSnippetLoading ? (
+                  <div className="w-full h-20 bg-gray-100 rounded-xl animate-pulse" />
+                ) : (
+                  <textarea value={feedSnippet} onChange={e => setFeedSnippet(e.target.value)} rows={3}
+                    placeholder="뉴스 내용 요약이 자동으로 입력돼요. 직접 수정하거나 추가할 수 있어요."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300" />
+                )}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">다루고 싶은 내용 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <textarea value={feedNotes} onChange={e => setFeedNotes(e.target.value)} rows={6}
+                  placeholder={`예)\n이 주제에 대한 나의 직접 경험\n가장 강조하고 싶은 포인트\n독자에게 전하고 싶은 메시지\n이 글을 쓰게 된 계기`}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300" />
+                <p className="text-xs text-gray-400 mt-1">내 시각·경험·의견을 적으면 더 개성 있는 프롬프트가 만들어져요</p>
+              </div>
+              {feedError && <p className="text-sm text-red-400">{feedError}</p>}
+              <button onClick={generateFeedPrompt} disabled={!feedTopic.trim()}
+                className="w-full py-3 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                프롬프트 생성
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <button onClick={() => setMode('golden-category')} className="bg-white border-2 border-gray-100 hover:border-yellow-400 p-5 rounded-2xl text-left transition-all duration-200 group hover:-translate-y-1 hover:shadow-lg hover:bg-yellow-50 flex flex-col">
-                <Trophy className="w-6 h-6 text-yellow-400 group-hover:text-yellow-500 mb-4" />
-                <h3 className="font-bold text-sm mb-1 group-hover:text-yellow-500">황금키워드 발굴</h3>
-                <p className="text-gray-400 text-xs leading-snug">검색량은 높고 경쟁은 낮은 키워드를 골라드려요</p>
-              </button>
-              <button onClick={() => setMode('trend-category')} className="bg-white border-2 border-gray-100 hover:border-green-400 p-5 rounded-2xl text-left transition-all duration-200 group hover:-translate-y-1 hover:shadow-lg hover:bg-green-50 flex flex-col">
-                <TrendingUp className="w-6 h-6 text-green-400 group-hover:text-green-500 mb-4" />
-                <h3 className="font-bold text-sm mb-1 group-hover:text-green-500">트렌드·이슈 글감</h3>
-                <p className="text-gray-400 text-xs leading-snug">지금 가장 핫한 이슈로 글감을 바로 찾아드려요</p>
-              </button>
-              <button onClick={startNewsRanking} className="bg-white border-2 border-gray-100 hover:border-red-400 p-5 rounded-2xl text-left transition-all duration-200 group hover:-translate-y-1 hover:shadow-lg hover:bg-red-50 flex flex-col">
-                <Newspaper className="w-6 h-6 text-red-400 group-hover:text-red-500 mb-4" />
-                <h3 className="font-bold text-sm mb-1 group-hover:text-red-500">실시간 인기 뉴스</h3>
-                <p className="text-gray-400 text-xs leading-snug">지금 가장 주목받는 뉴스로 글 아이디어를 얻어보세요</p>
-              </button>
+          </div>
+        )}
+
+        {/* ── feed-loading ── */}
+        {mode === 'feed-loading' && (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <PenLine className="w-8 h-8 text-blue-400 mb-4" />
+            <h2 className="text-xl font-bold mb-2">홈피드 프롬프트 생성 중</h2>
+            <p className="text-gray-500 text-sm">최적화된 글쓰기 프롬프트를 만들고 있어요</p>
+            <div className="flex justify-center gap-1.5 mt-4">
+              <div className="w-2 h-2 bg-blue-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}} />
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
             </div>
-          </>
+          </div>
+        )}
+
+        {/* ── feed-result ── */}
+        {mode === 'feed-result' && feedPrompt && (
+          <div className="space-y-4">
+            <button onClick={() => setMode('feed-input')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            <h2 className="text-xl font-bold pl-2">노출형 프롬프트</h2>
+            <p className="text-gray-400 text-sm -mt-2 pl-2">아래 프롬프트를 복사해서 Claude나 ChatGPT에 붙여넣으세요</p>
+            <div className="bg-white rounded-2xl p-6 shadow-sm relative">
+              <button onClick={() => { navigator.clipboard.writeText(feedPrompt); setFeedCopied(true); setTimeout(() => setFeedCopied(false), 2000) }}
+                className="absolute top-4 right-4 flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                <Copy className="w-3.5 h-3.5" />
+                {feedCopied ? '복사됨' : '복사'}
+              </button>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed font-sans pr-12">{feedPrompt}</pre>
+            </div>
+          </div>
         )}
 
         {/* ── write-input ── */}
         {mode === 'write-input' && (
           <div>
-            <button onClick={resetAll} className="text-gray-400 text-sm mb-6 hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold mb-2 pl-2">키워드 분석</h2>
+            <h2 className="text-xl font-bold mb-2 pl-2">검색형 상위노출 프롬프트 생성</h2>
             <p className="text-gray-400 text-sm mb-6 pl-2">키워드를 입력하면 상위노출 패턴을 분석하고 프롬프트를 만들어드려요</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
               <div>
@@ -1656,7 +1847,6 @@ export default function DashboardPage() {
         {/* ── golden-category ── */}
         {mode === 'golden-category' && (
           <div>
-            <button onClick={resetAll} className="text-gray-400 text-sm mb-6 hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold mb-2 pl-2">황금키워드 발굴</h2>
             <p className="text-gray-400 text-sm mb-6 pl-2">내 블로그 카테고리를 선택하세요</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1664,10 +1854,10 @@ export default function DashboardPage() {
                 <button
                   key={cat.id}
                   onClick={() => startGolden(cat.id)}
-                  className="bg-white border-2 border-gray-100 hover:border-yellow-400 p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
+                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
                 >
-                  <cat.icon className={`w-6 h-6 mb-2 ${cat.color} group-hover:text-yellow-500`} />
-                  <p className="font-medium text-sm group-hover:text-yellow-500">{cat.label}</p>
+                  <cat.icon className={`w-6 h-6 mb-2 ${cat.color}`} />
+                  <p className="font-medium text-sm">{cat.label}</p>
                 </button>
               ))}
             </div>
@@ -1679,17 +1869,17 @@ export default function DashboardPage() {
           <div className="text-center py-20">
             <div className="flex justify-center mb-6">
               <div className="relative w-14 h-14">
-                <div className="absolute inset-0 rounded-full border-4 border-yellow-100"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-yellow-400 animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center"><Trophy className="w-5 h-5 text-yellow-400" /></div>
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-400 animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center"><Trophy className="w-5 h-5 text-blue-400" /></div>
               </div>
             </div>
             <h2 className="text-xl font-bold mb-2">황금키워드 찾는 중</h2>
             <p className="text-gray-500 text-sm">경쟁이 적고 검색량이 좋은 키워드를 찾고 있어요</p>
             <div className="flex justify-center gap-1.5 mt-4">
-              <div className="w-2 h-2 bg-yellow-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-              <div className="w-2 h-2 bg-yellow-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+              <div className="w-2 h-2 bg-blue-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
             </div>
           </div>
         )}
@@ -1699,11 +1889,10 @@ export default function DashboardPage() {
           <div className="space-y-4">
             <button onClick={() => setMode('golden-category')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold pl-2">황금키워드 발굴</h2>
-            <p className="text-gray-400 text-sm -mt-2 pl-2">
-              카테고리: <span className="text-yellow-500 font-medium inline-flex items-center gap-1">
-                {(() => { const cat = CATEGORIES.find(c => c.id === goldenCategory); return cat ? <cat.icon className="w-3.5 h-3.5" /> : null })()}
-                {CATEGORIES.find(c => c.id === goldenCategory)?.label}
-              </span>
+            <p className="text-gray-400 text-sm -mt-2 pl-2 flex items-center gap-1">
+              카테고리:
+              {(() => { const cat = CATEGORIES.find(c => c.id === goldenCategory); return cat ? <cat.icon className="w-3.5 h-3.5" /> : null })()}
+              <span className="text-gray-400 font-medium">{CATEGORIES.find(c => c.id === goldenCategory)?.label}</span>
             </p>
 
             {goldenError && <p className="text-red-500 text-sm">{goldenError}</p>}
@@ -1716,14 +1905,32 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <table className="w-full text-sm">
+                <table className="w-full text-xs table-fixed">
                   <thead>
-                    <tr className="text-xs text-gray-400 border-b border-gray-100 bg-gray-50">
-                      <th className="text-left px-4 py-3 font-medium">키워드</th>
-                      <th className="text-right px-3 py-3 font-medium">PC</th>
-                      <th className="text-right px-3 py-3 font-medium">모바일</th>
-                      <th className="text-right px-3 py-3 font-medium">블로그</th>
-                      <th className="text-center px-3 py-3 font-medium">경쟁강도</th>
+                    <tr className="text-[11px] text-gray-400 border-b border-gray-100 bg-gray-50">
+                      <th className="text-center px-4 py-3 font-medium w-[30%]">키워드</th>
+                      <th className="text-center px-3 py-3 font-medium w-[10%]">PC</th>
+                      <th className="text-center px-3 py-3 font-medium w-[10%]">모바일</th>
+                      <th className="text-center px-3 py-3 font-medium w-[10%]">블로그</th>
+                      <th className="text-center px-3 py-3 font-medium w-[14%]">경쟁강도</th>
+                      <th className="text-center px-3 py-3 font-medium w-[26%]">
+                        <span className="inline-flex items-center justify-center gap-1">
+                          글쓰기
+                          <span
+                            ref={writeTooltipRef}
+                            className="cursor-default"
+                            onMouseEnter={() => {
+                              if (writeTooltipRef.current) {
+                                const r = writeTooltipRef.current.getBoundingClientRect()
+                                setWriteTooltipPos({ x: r.right + 8, y: r.top + r.height / 2 })
+                              }
+                            }}
+                            onMouseLeave={() => setWriteTooltipPos(null)}
+                          >
+                            <Info className="w-3 h-3 text-gray-400" />
+                          </span>
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1731,68 +1938,37 @@ export default function DashboardPage() {
                       <>
                         <tr
                           key={kw.keyword}
-                          onClick={() => toggleKeyword(kw.keyword)}
-                          className="border-b border-gray-50 hover:bg-yellow-50 cursor-pointer transition-colors"
+                          className="border-b border-gray-50 hover:bg-gray-50 transition-colors"
                         >
                           <td className="px-4 py-3 font-medium text-gray-800">
                             <span className="flex items-center gap-1.5">
                               {kw.keyword}
                               {(kw.trend_score ?? 0) >= 50 && (
-                                <span className="inline-flex items-center gap-0.5 text-xs bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded-full font-medium"><Flame className="w-3 h-3" /> 트렌드</span>
+                                <span
+                                  className="inline-flex items-center gap-0.5 bg-orange-50 text-orange-500 px-1 py-px rounded-full font-medium shrink-0 cursor-default"
+                                  style={{fontSize:'9px'}}
+                                  onMouseEnter={e => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setTrendBadgeTooltipPos({ x: r.right + 8, y: r.top + r.height / 2 }) }}
+                                  onMouseLeave={() => setTrendBadgeTooltipPos(null)}
+                                ><Flame className="w-2 h-2" /> 트렌드</span>
                               )}
                             </span>
                           </td>
-                          <td className="px-3 py-3 text-right text-gray-600">{kw.pc_volume.toLocaleString()}</td>
-                          <td className="px-3 py-3 text-right text-gray-600">{kw.mobile_volume.toLocaleString()}</td>
-                          <td className="px-3 py-3 text-right text-gray-600">{kw.blog_count?.toLocaleString() ?? '-'}</td>
+                          <td className="px-3 py-3 text-center text-gray-600">{kw.pc_volume.toLocaleString()}</td>
+                          <td className="px-3 py-3 text-center text-gray-600">{kw.mobile_volume.toLocaleString()}</td>
+                          <td className="px-3 py-3 text-center text-gray-600">{kw.blog_count?.toLocaleString() ?? '-'}</td>
+                          <td className="px-3 py-3">
+                            <div className="flex items-center justify-center gap-1 text-[11px] text-green-600 font-medium">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                              <span>{kw.competition_label}</span>
+                            </div>
+                          </td>
                           <td className="px-3 py-3 text-center">
-                            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
-                              kw.competition_label === '매우좋음' ? 'text-green-600 bg-green-50' : 'text-green-700 bg-green-50'
-                            }`}>
-                              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                              {kw.competition_label}
-                            </span>
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => goToWrite(kw.keyword, [kw.keyword])} className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">검색형 <ChevronRight className="w-2.5 h-2.5" /></button>
+                              <button onClick={() => goToFeed(kw.keyword)} className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">노출형 <ChevronRight className="w-2.5 h-2.5" /></button>
+                            </div>
                           </td>
                         </tr>
-                        {expandedKeyword === kw.keyword && (
-                          <tr key={`ideas-${kw.keyword}`} className="bg-yellow-50 border-b border-gray-100">
-                            <td colSpan={5} className="px-4 py-4">
-                              {ideasMap[kw.keyword] === 'loading' && (
-                                <p className="text-sm text-gray-400 flex items-center gap-1.5"><Lightbulb className="w-4 h-4" /> 글감 생성 중...</p>
-                              )}
-                              {ideasMap[kw.keyword] === 'error' && (
-                                <p className="text-sm text-red-400">글감 생성에 실패했습니다.</p>
-                              )}
-                              {Array.isArray(ideasMap[kw.keyword]) && (
-                                <div className="space-y-3">
-                                  <div className="relative inline-block group mb-2">
-                                    <p className="text-xs font-semibold text-gray-600 cursor-default flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5 text-yellow-400" /> 황금 글감 추천</p>
-                                    <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover:block z-10 whitespace-nowrap">
-                                      <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-1.5 shadow-lg">
-                                        상위 노출 가능성이 높은 글감입니다.
-                                        <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-800" />
-                                      </div>
-                                    </div>
-                                  </div>
-                                  {(ideasMap[kw.keyword] as KeywordIdea[]).map((idea, j) => (
-                                    <div key={j} className="bg-white rounded-xl px-4 py-3 shadow-sm">
-                                      <p className="font-medium text-sm text-gray-800 mb-1.5">
-                                        <span className="text-yellow-500 mr-1">{j + 1}.</span>{idea.title}
-                                      </p>
-                                      <ul className="space-y-0.5">
-                                        {idea.points.map((pt, k) => (
-                                          <li key={k} className="text-xs text-gray-500 flex gap-1.5">
-                                            <span className="text-yellow-400 shrink-0">•</span>{pt}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        )}
                       </>
                     ))}
                   </tbody>
@@ -1802,7 +1978,7 @@ export default function DashboardPage() {
                     <button
                       onClick={loadMoreGolden}
                       disabled={goldenLoadingMore}
-                      className="px-6 py-2 bg-yellow-400 text-white rounded-xl text-sm font-medium hover:bg-yellow-500 disabled:opacity-50"
+                      className="px-6 py-2 bg-blue-400 text-white rounded-xl text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
                     >
                       {goldenLoadingMore ? '불러오는 중...' : '더보기'}
                     </button>
@@ -1816,7 +1992,6 @@ export default function DashboardPage() {
         {/* ── keyword-insight-input ── */}
         {mode === 'keyword-insight-input' && (
           <div>
-            <button onClick={resetAll} className="text-gray-400 text-sm mb-6 hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold mb-2 pl-2">키워드 인사이트</h2>
             <p className="text-gray-400 text-sm mb-6 pl-2">키워드 하나를 입력하면 검색량과 경쟁강도를 분석해드려요 (일 10회)</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
@@ -1867,7 +2042,6 @@ export default function DashboardPage() {
         {/* ── trend-category ── */}
         {mode === 'trend-category' && (
           <div>
-            <button onClick={resetAll} className="text-gray-400 text-sm mb-6 hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold mb-2 pl-2">트렌드·이슈 글감 발굴</h2>
             <p className="text-gray-400 text-sm mb-6 pl-2">내 블로그 카테고리를 선택하세요</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1875,10 +2049,10 @@ export default function DashboardPage() {
                 <button
                   key={cat.id}
                   onClick={() => startTrend(cat.id)}
-                  className="bg-white border-2 border-gray-100 hover:border-green-400 p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
+                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
                 >
-                  <cat.icon className={`w-6 h-6 mb-2 ${cat.color} group-hover:text-green-500`} />
-                  <p className="font-medium text-sm group-hover:text-green-500">{cat.label}</p>
+                  <cat.icon className={`w-6 h-6 mb-2 ${cat.color}`} />
+                  <p className="font-medium text-sm">{cat.label}</p>
                 </button>
               ))}
             </div>
@@ -1890,17 +2064,17 @@ export default function DashboardPage() {
           <div className="text-center py-20">
             <div className="flex justify-center mb-6">
               <div className="relative w-14 h-14">
-                <div className="absolute inset-0 rounded-full border-4 border-green-100"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-green-400 animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-green-400" /></div>
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-400 animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-blue-400" /></div>
               </div>
             </div>
             <h2 className="text-xl font-bold mb-2">트렌드·이슈 불러오는 중</h2>
             <p className="text-gray-500 text-sm">트렌드 키워드와 지금 뜨는 이슈를 동시에 불러오고 있어요</p>
             <div className="flex justify-center gap-1.5 mt-4">
-              <div className="w-2 h-2 bg-green-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+              <div className="w-2 h-2 bg-blue-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
             </div>
           </div>
         )}
@@ -1910,157 +2084,154 @@ export default function DashboardPage() {
           <div className="space-y-4">
             <button onClick={() => setMode('trend-category')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold pl-2">트렌드·이슈 글감 발굴</h2>
-            <p className="text-gray-400 text-sm -mt-2 pl-2">
-              카테고리: <span className="text-green-500 font-medium inline-flex items-center gap-1">
-                {(() => { const cat = CATEGORIES.find(c => c.id === trendCategory); return cat ? <cat.icon className="w-3.5 h-3.5" /> : null })()}
-                {CATEGORIES.find(c => c.id === trendCategory)?.label}
-              </span>
+            <p className="text-gray-400 text-sm -mt-2 pl-2 flex items-center gap-1">
+              카테고리:
+              {(() => { const cat = CATEGORIES.find(c => c.id === trendCategory); return cat ? <cat.icon className="w-3.5 h-3.5" /> : null })()}
+              <span className="text-gray-400 font-medium">{CATEGORIES.find(c => c.id === trendCategory)?.label}</span>
             </p>
 
-            {/* 탭 */}
-            <div className="flex bg-white rounded-2xl shadow-sm overflow-hidden">
-              <button
-                onClick={() => setTrendTab('issue')}
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${trendTab === 'issue' ? 'bg-orange-50 text-orange-500 border-b-2 border-orange-400' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <span className="flex items-center justify-center gap-1"><Zap className="w-3.5 h-3.5" /> 바이럴</span>
-              </button>
-              <button
-                onClick={() => setTrendTab('trend')}
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${trendTab === 'trend' ? 'bg-green-50 text-green-500 border-b-2 border-green-400' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <span className="flex items-center justify-center gap-1"><Flame className="w-3.5 h-3.5" /> 키워드</span>
-              </button>
-            </div>
-
-            {/* 이슈 탭 */}
-            {trendTab === 'issue' && (
-              <>
-                {issueError && <p className="text-red-500 text-sm">{issueError}</p>}
-                {issueTitles.length > 0 ? (
-                  <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-center">
-                      <span className="text-xs font-medium text-gray-400">이슈</span>
-                    </div>
-                    <ul className="divide-y divide-gray-50">
-                      {issueTitles.map((title, i) => (
-                        <li key={i}>
-                          <div className="px-4 py-3 flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
-                              <span className="text-sm text-gray-700 leading-snug">{title}</span>
-                            </div>
-                            <button
-                              onClick={() => generateIssueIdea(title)}
-                              className={`text-xs px-3 py-1.5 rounded-lg font-medium shrink-0 transition-colors ${
-                                issueExpandedTopic === title
-                                  ? 'bg-orange-500 text-white'
-                                  : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
-                              }`}
-                            >
-                              글감 아이디어
-                            </button>
-                          </div>
-                          {issueExpandedTopic === title && (
-                            <div className="px-4 pb-4 bg-orange-50">
-                              <ShortentsIdeaBlock ideasState={issueIdeasMap[title]} />
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : !issueError && (
-                  <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
-                    <Zap className="w-8 h-8 mx-auto mb-3 text-gray-300" />
-                    <p className="font-medium mb-1">이 카테고리는 이슈 데이터가 없어요</p>
-                    <p className="text-sm">키워드 탭에서 지금 뜨는 트렌드 키워드를 확인해보세요</p>
-                  </div>
-                )}
-              </>
+            {issueError && <p className="text-red-500 text-sm">{issueError}</p>}
+            {issueTitles.length > 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center">
+                  <span className="flex-1 text-xs font-medium text-gray-400 text-center">트렌드·이슈</span>
+                  <span className="shrink-0 w-28 text-xs font-medium text-gray-400 text-center">글쓰기</span>
+                </div>
+                <ul className="divide-y divide-gray-50">
+                  {issueTitles.map((title, i) => (
+                    <li key={i} className="hover:bg-gray-50 transition-colors">
+                      <div className="px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
+                          <span className="text-sm text-gray-700 leading-snug">{title}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button onClick={() => goToWrite(title, [])} className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-0.5">검색형 <ChevronRight className="w-3 h-3" /></button>
+                          <button onClick={() => goToFeed(title)} className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center gap-0.5">노출형 <ChevronRight className="w-3 h-3" /></button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : !issueError && (
+              <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
+                <Zap className="w-8 h-8 mx-auto mb-3 text-gray-300" />
+                <p className="font-medium mb-1">이 카테고리는 이슈 데이터가 없어요</p>
+                <p className="text-sm">검색 트렌드 탭에서 지금 뜨는 트렌드 키워드를 확인해보세요</p>
+              </div>
             )}
+          </div>
+        )}
 
-            {/* 트렌드 탭 */}
-            {trendTab === 'trend' && (
+        {/* ── search-trend-category ── */}
+        {mode === 'search-trend-category' && (
+          <div>
+            <h2 className="text-xl font-bold mb-2 pl-2">검색 트렌드</h2>
+            <p className="text-gray-400 text-sm mb-6 pl-2">카테고리를 선택하면 지금 뜨는 키워드를 보여드려요</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {CATEGORIES.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => startSearchTrend(cat.id)}
+                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
+                >
+                  <cat.icon className={`w-6 h-6 mb-2 ${cat.color}`} />
+                  <p className="font-medium text-sm">{cat.label}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── search-trend-loading ── */}
+        {mode === 'search-trend-loading' && (
+          <div className="text-center py-20">
+            <div className="flex justify-center mb-6">
+              <div className="relative w-14 h-14">
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-400 animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-blue-400" /></div>
+              </div>
+            </div>
+            <h2 className="text-xl font-bold mb-2">검색 트렌드 불러오는 중</h2>
+            <p className="text-gray-500 text-sm">지금 가장 많이 검색되는 키워드를 불러오고 있어요</p>
+            <div className="flex justify-center gap-1.5 mt-4">
+              <div className="w-2 h-2 bg-blue-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+            </div>
+          </div>
+        )}
+
+        {/* ── search-trend-result ── */}
+        {mode === 'search-trend-result' && (
+          <div className="space-y-4">
+            <button onClick={() => setMode('search-trend-category')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            <h2 className="text-xl font-bold pl-2">검색 트렌드</h2>
+            <p className="text-gray-400 text-sm -mt-2 pl-2 flex items-center gap-1">
+              카테고리:
+              {(() => { const cat = CATEGORIES.find(c => c.id === searchTrendCategory); return cat ? <cat.icon className="w-3.5 h-3.5" /> : null })()}
+              <span className="text-gray-400 font-medium">{CATEGORIES.find(c => c.id === searchTrendCategory)?.label}</span>
+            </p>
+            {searchTrendError && <p className="text-red-500 text-sm">{searchTrendError}</p>}
+            {searchTrendKeywords.length > 0 ? (
               <>
-                {trendError && <p className="text-red-500 text-sm">{trendError}</p>}
-                {trendKeywords.length === 0 && !trendError ? (
-                  <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
-                    <RefreshCw className="w-8 h-8 mx-auto mb-3 text-gray-300" />
-                    <p className="font-medium mb-1">아직 데이터가 준비 중이에요</p>
-                    <p className="text-sm">트렌드 수집은 매일 새벽 5시에 진행돼요</p>
+                <div className="bg-white rounded-2xl shadow-sm overflow-hidden wordcloud-wrap">
+                  <style>{`.wordcloud-wrap text { cursor: pointer; transition: fill 0.15s; } .wordcloud-wrap text:hover { fill: #3b82f6 !important; }`}</style>
+                  <WordCloud
+                    data={searchTrendKeywords.map(kw => ({ text: kw.keyword, value: Math.round(kw.ratio) }))}
+                    width={560}
+                    height={420}
+                    font="Pretendard, sans-serif"
+                    fontWeight={(w: any) => w.value >= 65 ? 'bold' : w.value >= 35 ? '600' : '400'}
+                    fontSize={(w: any) => Math.max(12, Math.round(w.value * 0.45))}
+                    rotate={(w: any) => {
+                      const seed = w.text.charCodeAt(0) % 5
+                      return seed === 1 ? 90 : seed === 3 ? -90 : 0
+                    }}
+                    fill={(w: any) => {
+                      const v = w.value
+                      if (v >= 75) return '#111827'
+                      if (v >= 55) return '#1f2937'
+                      if (v >= 40) return '#374151'
+                      if (v >= 25) return '#4b5563'
+                      return '#9ca3af'
+                    }}
+                    padding={4}
+                  />
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-400 pl-8">키워드</span>
+                    <span className="shrink-0 w-32 text-xs font-medium text-gray-400 text-center">트렌드 지수</span>
                   </div>
-                ) : (
-                  <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center">
-                      <span className="flex-1 text-xs font-medium text-gray-400 text-center">키워드</span>
-                      <span className="flex-1 text-xs font-medium text-gray-400 text-center">트렌드 지수</span>
-                      <span className="flex-1"></span>
-                    </div>
-                    <ul className="divide-y divide-gray-50">
-                      {trendKeywords.map((kw, i) => (
-                        <li key={kw.keyword}>
-                          <div
-                            className="px-4 py-3 flex items-center hover:bg-green-50 cursor-pointer transition-colors"
-                            onClick={() => toggleTrendKeyword(kw.keyword)}
-                          >
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
-                              <span className="text-sm text-gray-700 font-medium truncate">{kw.keyword}</span>
-                            </div>
-                            <div className="flex-1 flex items-center justify-center gap-1.5">
-                              <span className="text-xs text-gray-500 font-medium">{Math.round(kw.ratio)}</span>
-                              {kw.ratio >= 80 && <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-medium">핫해요</span>}
-                              {kw.ratio >= 60 && kw.ratio < 80 && <span className="text-xs bg-orange-50 text-orange-500 px-2 py-0.5 rounded-full font-medium">상승 중</span>}
-                              {kw.ratio < 60 && <span className="text-xs bg-blue-50 text-blue-400 px-2 py-0.5 rounded-full font-medium">보통</span>}
-                            </div>
-                            <div className="flex-1 flex justify-end">
-                              <button
-                                onClick={e => { e.stopPropagation(); toggleTrendKeyword(kw.keyword) }}
-                                className={`text-xs px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                                  trendExpandedKeyword === kw.keyword
-                                    ? 'bg-green-500 text-white'
-                                    : 'bg-green-50 text-green-600 hover:bg-green-100'
-                                }`}
-                              >
-                                글감 아이디어
-                              </button>
-                            </div>
+                  <ul className="divide-y divide-gray-50">
+                    {searchTrendKeywords.map((kw, i) => (
+                      <li key={kw.keyword}>
+                        <div className="px-4 py-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
+                            <span className="text-sm text-gray-700 font-medium truncate">{kw.keyword}</span>
                           </div>
-                          {trendExpandedKeyword === kw.keyword && (
-                            <div className="px-4 pb-4 bg-green-50">
-                              {trendIdeasMap[kw.keyword] === 'loading' && (
-                                <p className="text-sm text-gray-400 pt-2 flex items-center gap-1.5"><Lightbulb className="w-4 h-4" /> 글감 생성 중...</p>
-                              )}
-                              {typeof trendIdeasMap[kw.keyword] === 'string' && trendIdeasMap[kw.keyword] !== 'loading' && (
-                                <p className="text-sm text-red-400 pt-2">오류: {trendIdeasMap[kw.keyword] as string}</p>
-                              )}
-                              {Array.isArray(trendIdeasMap[kw.keyword]) && (
-                                <div className="space-y-2 pt-2">
-                                  {(trendIdeasMap[kw.keyword] as KeywordIdea[]).map((idea, j) => (
-                                    <div key={j} className="bg-white rounded-xl px-4 py-3 shadow-sm">
-                                      <p className="font-medium text-sm text-gray-800 mb-1.5">
-                                        <span className="text-green-500 mr-1">{j + 1}.</span>{idea.title}
-                                      </p>
-                                      <ul className="space-y-0.5">
-                                        {idea.points.map((pt, k) => (
-                                          <li key={k} className="text-xs text-gray-500 flex gap-1.5">
-                                            <span className="text-green-400 shrink-0">•</span>{pt}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                          <div className="shrink-0 w-32 flex items-center justify-center gap-1.5">
+                            <span className="text-xs text-gray-500 font-medium">{Math.round(kw.ratio)}</span>
+                            {kw.ratio >= 80 && <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-medium">핫해요</span>}
+                            {kw.ratio >= 60 && kw.ratio < 80 && <span className="text-xs bg-orange-50 text-orange-500 px-2 py-0.5 rounded-full font-medium">상승 중</span>}
+                            {kw.ratio < 60 && <span className="text-xs bg-blue-50 text-blue-400 px-2 py-0.5 rounded-full font-medium">보통</span>}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </>
+            ) : !searchTrendError && (
+              <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
+                <RefreshCw className="w-8 h-8 mx-auto mb-3 text-gray-300" />
+                <p className="font-medium mb-1">아직 데이터가 준비 중이에요</p>
+                <p className="text-sm">트렌드 수집은 매일 새벽 5시에 진행돼요</p>
+              </div>
             )}
           </div>
         )}
@@ -2070,17 +2241,17 @@ export default function DashboardPage() {
           <div className="text-center py-20">
             <div className="flex justify-center mb-6">
               <div className="relative w-14 h-14">
-                <div className="absolute inset-0 rounded-full border-4 border-red-100"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-red-400 animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center"><Newspaper className="w-5 h-5 text-red-400" /></div>
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-400 animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center"><Newspaper className="w-5 h-5 text-blue-400" /></div>
               </div>
             </div>
             <h2 className="text-xl font-bold mb-2">뉴스 랭킹 불러오는 중</h2>
             <p className="text-gray-500 text-sm">지금 가장 주목받는 뉴스를 불러오고 있어요</p>
             <div className="flex justify-center gap-1.5 mt-4">
-              <div className="w-2 h-2 bg-red-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-              <div className="w-2 h-2 bg-red-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+              <div className="w-2 h-2 bg-blue-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
             </div>
           </div>
         )}
@@ -2088,55 +2259,58 @@ export default function DashboardPage() {
         {/* ── news-result ── */}
         {mode === 'news-result' && (
           <div className="space-y-4">
-            <button onClick={resetAll} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold pl-2">실시간 인기 뉴스</h2>
-            <div className="flex items-center justify-between -mt-2 pl-2">
-              <p className="text-gray-400 text-sm">오늘 가장 많이 읽힌 뉴스로 블로그 글감을 만들어보세요</p>
+            <div className="flex items-center justify-between">
+              <button onClick={() => switchTab('content')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+              <button onClick={startNewsRanking} className="text-gray-400 text-sm hover:text-gray-600 flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5" /> 새로고침</button>
+            </div>
+            <h2 className="text-xl font-bold pl-2 flex items-baseline gap-2">
+              실시간 인기 뉴스
               {newsRankingFetchedAt && (
-                <p className="text-xs text-gray-400 shrink-0 ml-3">
+                <span className="text-xs font-normal text-gray-400">
                   {(() => {
                     const d = new Date(newsRankingFetchedAt)
                     const yy = d.getFullYear()
                     const mm = String(d.getMonth() + 1).padStart(2, '0')
                     const dd = String(d.getDate()).padStart(2, '0')
                     const hh = String(d.getHours()).padStart(2, '0')
-                    return `${yy}/${mm}/${dd} ${hh}:00 기준`
+                    return `(${yy}/${mm}/${dd} ${hh}:00 기준)`
                   })()}
-                </p>
+                </span>
               )}
-            </div>
+            </h2>
+            <p className="text-gray-400 text-sm -mt-2 pl-2">오늘 가장 많이 읽힌 뉴스로 블로그 글감을 만들어보세요</p>
 
             {newsRankingError && <p className="text-red-500 text-sm">{newsRankingError}</p>}
 
             {newsRankingItems.length > 0 ? (
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-5 pt-4 pb-3 border-b border-gray-50">
-                  <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Newspaper className="w-3.5 h-3.5" /> 인기 뉴스 TOP {newsRankingItems.length}</p>
+                <div className="px-5 pt-4 pb-3 border-b border-gray-50 flex items-center justify-between gap-3">
+                  <span className="flex-1 text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Newspaper className="w-3.5 h-3.5" /> 인기 뉴스 TOP {newsRankingItems.length}</span>
+                  <span className="shrink-0 w-28 text-xs font-medium text-gray-400 text-center">글쓰기</span>
                 </div>
                 <ul className="divide-y divide-gray-50">
                   {newsRankingItems.map((item, i) => (
-                    <li key={i}>
-                      <div className="px-4 py-3 flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-2 min-w-0">
-                          <span className="text-xs text-red-400 font-medium shrink-0 mt-0.5">#{String(i + 1).padStart(2, '0')}</span>
-                          <span className="text-sm text-gray-700 leading-snug">{item}</span>
+                    <li key={i} className="hover:bg-gray-50 transition-colors">
+                      <div className="px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
+                          <span className="text-sm text-gray-700 leading-snug">{item.title}</span>
                         </div>
-                        <button
-                          onClick={() => generateNewsIdea(item)}
-                          className={`text-xs px-3 py-1.5 rounded-lg font-medium shrink-0 transition-colors ${
-                            newsExpandedItem === item
-                              ? 'bg-red-500 text-white'
-                              : 'bg-red-50 text-red-600 hover:bg-red-100'
-                          }`}
-                        >
-                          글감 아이디어
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => goToWrite(item.title, [])}
+                            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-0.5"
+                          >
+                            검색형 <ChevronRight className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => goToFeed(item.title)}
+                            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center gap-0.5"
+                          >
+                            노출형 <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
-                      {newsExpandedItem === item && (
-                        <div className="px-4 pb-4 bg-red-50">
-                          <ShortentsIdeaBlock ideasState={newsIdeasMap[item]} />
-                        </div>
-                      )}
                     </li>
                   ))}
                 </ul>
@@ -2199,25 +2373,58 @@ export default function DashboardPage() {
   )
 }
 
-function ShortentsIdeaBlock({ ideasState }: { ideasState: ShortentsIdea[] | 'loading' | string | undefined }) {
+function ShortentsIdeaSkeleton() {
+  return (
+    <div className="space-y-2 pt-2 animate-pulse">
+      {[0, 1].map(i => (
+        <div key={i} className="bg-gray-50 rounded-xl p-4 space-y-2">
+          <div className="rounded-lg px-3 py-2 bg-gray-100 space-y-1.5">
+            <div className="h-2.5 bg-gray-200 rounded w-10" />
+            <div className="h-4 bg-gray-200 rounded w-4/5" />
+          </div>
+          <div className="rounded-lg px-3 py-2 bg-gray-100 space-y-1.5">
+            <div className="h-2.5 bg-gray-200 rounded w-12" />
+            <div className="h-4 bg-gray-200 rounded w-3/4" />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <div className="h-5 bg-gray-200 rounded-full w-16" />
+            <div className="h-5 bg-gray-200 rounded-full w-12" />
+            <div className="h-5 bg-gray-200 rounded-full w-14" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function KeywordIdeaSkeleton() {
+  return (
+    <div className="space-y-2 pt-2 animate-pulse">
+      {[0, 1].map(i => (
+        <div key={i} className="bg-gray-50 rounded-xl px-4 py-3 space-y-2">
+          <div className="h-4 bg-gray-200 rounded w-3/4" />
+          <div className="space-y-1.5">
+            <div className="h-3 bg-gray-200 rounded w-full" />
+            <div className="h-3 bg-gray-200 rounded w-5/6" />
+            <div className="h-3 bg-gray-200 rounded w-4/5" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ShortentsIdeaBlock({ ideasState, onWriteSearch, onWriteFeed }: { ideasState: ShortentsIdea[] | 'loading' | string | undefined; onWriteSearch?: (title: string, keywords: string[]) => void; onWriteFeed?: (title: string) => void }) {
   if (!ideasState || ideasState === 'loading') {
-    return <p className="text-sm text-gray-400 py-2">💡 글감 생성 중...</p>
+    return <ShortentsIdeaSkeleton />
   }
   if (typeof ideasState === 'string') {
     return <p className="text-sm text-red-400 py-2">오류: {ideasState}</p>
   }
   return (
-    <div className="space-y-2 pt-2">
+    <div className="space-y-4 pt-4">
       {(ideasState as ShortentsIdea[]).map((idea, i) => (
-        <div key={i} className="bg-white rounded-xl p-4 shadow-sm space-y-2">
-          <div className="bg-blue-50 rounded-lg px-3 py-2">
-            <p className="text-xs text-blue-400 font-medium mb-0.5 flex items-center gap-1"><Search className="w-3 h-3" /> 검색형</p>
-            <p className="text-sm font-medium text-gray-800">{idea.searchTitle}</p>
-          </div>
-          <div className="bg-orange-50 rounded-lg px-3 py-2">
-            <p className="text-xs text-orange-400 font-medium mb-0.5 flex items-center gap-1"><Smartphone className="w-3 h-3" /> 홈피드형</p>
-            <p className="text-sm font-medium text-gray-800">{idea.feedTitle}</p>
-          </div>
+        <div key={i} className="bg-white rounded-xl p-4 shadow-sm space-y-3">
           {idea.keywords.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {idea.keywords.map((kw, j) => (
@@ -2225,6 +2432,29 @@ function ShortentsIdeaBlock({ ideasState }: { ideasState: ShortentsIdea[] | 'loa
               ))}
             </div>
           )}
+          <div className="space-y-1 mt-1">
+            <p className="text-xs text-blue-400 font-medium flex items-center gap-1"><Search className="w-3 h-3" /> 검색형</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-gray-800">{idea.searchTitle}</p>
+              {onWriteSearch && (
+                <button onClick={() => onWriteSearch(idea.searchTitle, idea.keywords)} className="text-xs text-blue-500 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md font-medium flex items-center gap-0.5 shrink-0 transition-colors">
+                  <PenLine className="w-3 h-3" /> 글쓰기
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="h-px bg-gray-100" />
+          <div className="space-y-1">
+            <p className="text-xs text-orange-400 font-medium flex items-center gap-1"><Smartphone className="w-3 h-3" /> 홈피드형</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-gray-800">{idea.feedTitle}</p>
+              {onWriteFeed && (
+                <button onClick={() => onWriteFeed(idea.feedTitle)} className="text-xs text-orange-500 bg-orange-50 hover:bg-orange-100 px-2 py-0.5 rounded-md font-medium flex items-center gap-0.5 shrink-0 transition-colors">
+                  <PenLine className="w-3 h-3" /> 글쓰기
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       ))}
     </div>

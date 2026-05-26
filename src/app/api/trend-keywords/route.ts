@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     .eq('category', category)
     .eq('collected_at', latest.collected_at)
     .order('ratio', { ascending: false })
-    .limit(10)
+    .limit(30)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

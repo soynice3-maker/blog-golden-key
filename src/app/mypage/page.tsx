@@ -77,7 +77,7 @@ setUserEmail(user.email ?? '')
   }
 
   const checkNickname = async () => {
-    if (!nickname) { setProfileErrors(p => ({ ...p, nickname: '닉네임을 입력해주세요.' })); return }
+    if (!nickname) { setProfileErrors(p => ({ ...p, nickname: '닉네임을 입력해 주세요.' })); return }
     setNicknameStatus('checking')
     const res = await fetch('/api/check-nickname', {
       method: 'POST',
@@ -91,13 +91,13 @@ setUserEmail(user.email ?? '')
 
   const handleSaveProfile = async () => {
     const errors: Record<string, string> = {}
-    if (!name) errors.name = '이름을 입력해주세요.'
-    if (!nickname) errors.nickname = '닉네임을 입력해주세요.'
+    if (!name) errors.name = '이름을 입력해 주세요.'
+    if (!nickname) errors.nickname = '닉네임을 입력해 주세요.'
     else if (nickname !== originalNickname && nicknameStatus !== 'available') {
       errors.nickname = '닉네임 중복확인을 완료해주세요.'
     }
-    if (phone && phone.replace(/\D/g, '').length < 10) errors.phone = '올바른 휴대전화번호를 입력해주세요.'
-    if (birthdate.length > 0 && birthdate.length < 8) errors.birthdate = '생년월일 8자리를 입력해주세요.'
+    if (phone && phone.replace(/\D/g, '').length < 10) errors.phone = '올바른 휴대전화번호를 입력해 주세요.'
+    if (birthdate.length > 0 && birthdate.length < 8) errors.birthdate = '생년월일 8자리를 입력해 주세요.'
     setProfileErrors(errors)
     if (Object.keys(errors).length > 0) return
 

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { Key } from 'lucide-react'
 
 const DOMAINS = ['naver.com', 'daum.net', 'nate.com', 'gmail.com', 'direct']
 const DOMAIN_LABELS: Record<string, string> = {
@@ -29,17 +30,10 @@ function formatPhone(value: string): string {
 function validatePassword(pw: string): string {
   if (!pw) return ''
   if (pw.length < 8 || pw.length > 16 || !/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/\d/.test(pw) || !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw))
-    return '비밀번호: 8~16자의 영문 대/소문자, 숫자, 특수문자를 사용해 주세요.'
+    return '8~16자의 영문 대/소문자, 숫자, 특수문자를 사용해 주세요.'
   return ''
 }
 
-function CheckIcon() {
-  return (
-    <svg className="w-3 h-3 text-blue-500 flex-shrink-0 mt-[14px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-  )
-}
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -81,6 +75,7 @@ export default function SignupPage() {
   const [name, setName] = useState('')
   const [nickname, setNickname] = useState('')
   const [nicknameStatus, setNicknameStatus] = useState<CheckStatus>('idle')
+  const [nicknameTouched, setNicknameTouched] = useState(false)
   const [birthdate, setBirthdate] = useState('')
   const [gender, setGender] = useState<'M' | 'F' | ''>('')
   const [phone, setPhone] = useState('')
@@ -111,7 +106,7 @@ export default function SignupPage() {
 
   const requestOtp = async () => {
     if (!idLocal || (domain === 'direct' && !customDomain)) {
-      setErrors(p => ({ ...p, id: '아이디와 도메인을 입력해주세요.' })); return
+      setErrors(p => ({ ...p, id: '아이디와 도메인을 입력해 주세요.' })); return
     }
     setOtpStatus('sending')
     setErrors(p => ({ ...p, id: '' }))
@@ -136,12 +131,12 @@ export default function SignupPage() {
     } else {
       setOtpStatus('sent')
       setOtpCode('')
-      startCooldown(60)
+      startCooldown(180)
     }
   }
 
   const confirmOtp = async () => {
-    if (!otpCode) { setOtpError('인증번호를 입력해주세요.'); return }
+    if (!otpCode) { setOtpError('인증번호를 입력해 주세요.'); return }
     setOtpStatus('verifying')
     setOtpError('')
     const { error } = await supabase.auth.verifyOtp({
@@ -159,7 +154,7 @@ export default function SignupPage() {
   }
 
   const checkNickname = async () => {
-    if (!nickname) { setErrors(p => ({ ...p, nickname: '닉네임을 입력해주세요.' })); return }
+    if (!nickname) { setErrors(p => ({ ...p, nickname: '닉네임을 입력해 주세요.' })); return }
     setNicknameStatus('checking')
     setErrors(p => ({ ...p, nickname: '' }))
     try {
@@ -189,9 +184,9 @@ export default function SignupPage() {
     if (!name) newErrors.name = '이름은 필수 입력 항목입니다.'
     if (!nickname) newErrors.nickname = '닉네임은 필수 입력 항목입니다.'
     else if (nicknameStatus !== 'available') newErrors.nickname = '닉네임 중복확인을 완료해주세요.'
-    if (birthdate.length > 0 && birthdate.length < 8) newErrors.birthdate = '생년월일 8자리를 입력해주세요.'
+    if (birthdate.length > 0 && birthdate.length < 8) newErrors.birthdate = '생년월일 8자리를 입력해 주세요.'
     if (!gender) newErrors.gender = '성별을 선택해주세요.'
-    if (phone.replace(/\D/g, '').length < 10) newErrors.phone = '휴대전화번호를 입력해주세요.'
+    if (phone.replace(/\D/g, '').length < 10) newErrors.phone = '휴대전화번호를 입력해 주세요.'
     if (!TERMS.filter(t => t.required).every(t => agreed[t.id])) newErrors.terms = '필수 약관에 동의해주세요.'
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) return
@@ -224,36 +219,28 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="mb-6 block text-center">
-        <div className="text-2xl font-bold text-gray-900">블로그황금키 🔑</div>
+        <div className="text-2xl font-bold text-gray-900 flex items-center gap-1.5">블로그황금키 <Key className="w-6 h-6 text-yellow-400" /></div>
       </Link>
 
       <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-sm px-8 py-8 shadow-sm">
         <h2 className="text-lg font-bold text-center mb-5">회원가입</h2>
-        <div className="flex items-center gap-1 justify-end mb-4">
-          <svg className="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-          <span className="text-xs text-gray-400">표시는 필수 입력 항목입니다</span>
-        </div>
 
         {/* 아이디 */}
         <div className="mb-3">
-          <div className="flex items-start gap-2">
-            <CheckIcon />
-            <div className="flex-1 min-w-0">
-              <div className={`border rounded-xl overflow-hidden${errors.id ? 'border-red-400' : otpStatus === 'verified' ? 'border-blue-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+          <div className="min-w-0">
+              <div className={`border rounded-xl overflow-hidden ${errors.id ? 'border-red-400' : otpStatus === 'verified' ? 'border-blue-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <div className="flex items-center min-w-0">
                   <input type="text" placeholder="아이디" value={idLocal}
                     disabled={otpStatus === 'sent' || otpStatus === 'verifying' || otpStatus === 'verified'}
                     onChange={e => { setIdLocal(e.target.value); setOtpStatus('idle'); setErrors(p => ({ ...p, id: '' })) }}
-                    className="flex-1 px-4 py-3.5 text-sm focus:outline-none bg-transparent placeholder-gray-400 min-w-0 disabled:text-gray-400" />
+                    className="flex-1 px-4 py-3.5 text-sm focus:outline-none bg-transparent placeholder:text-gray-300 min-w-0 disabled:text-gray-400" />
                   <span className="text-gray-400 text-sm px-1 flex-shrink-0">@</span>
                   {domain === 'direct' ? (
                     <>
                       <input type="text" placeholder="도메인 직접입력" value={customDomain}
                         disabled={otpStatus === 'sent' || otpStatus === 'verifying' || otpStatus === 'verified'}
                         onChange={e => { setCustomDomain(e.target.value); setOtpStatus('idle') }}
-                        className="flex-1 py-3.5 text-sm focus:outline-none bg-transparent placeholder-gray-400 min-w-0 disabled:text-gray-400" />
+                        className="flex-1 py-3.5 text-sm focus:outline-none bg-transparent placeholder:text-gray-300 min-w-0 disabled:text-gray-400" />
                       <button type="button" onClick={() => { setDomain('naver.com'); setCustomDomain(''); setOtpStatus('idle') }}
                         disabled={otpStatus === 'sent' || otpStatus === 'verifying' || otpStatus === 'verified'}
                         className="pr-3 text-xs text-gray-400 hover:text-gray-600 flex-shrink-0 disabled:opacity-40">✕</button>
@@ -291,132 +278,122 @@ export default function SignupPage() {
               {/* OTP 입력란 */}
               {(otpStatus === 'sent' || otpStatus === 'verifying') && (
                 <div className="mt-2">
-                  <div className={`border rounded-xl overflow-hidden flex items-center${otpError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+                  <div className={`border rounded-xl overflow-hidden flex items-center ${otpError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                     <input type="text" inputMode="numeric" placeholder="인증번호 입력" value={otpCode} maxLength={8}
                       onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError('') }}
-                      className="flex-1 px-4 py-3.5 text-sm focus:outline-none bg-transparent placeholder-gray-400" />
+                      className="flex-1 px-4 py-3.5 text-sm focus:outline-none bg-transparent placeholder:text-gray-300" />
                     <button type="button" onClick={confirmOtp} disabled={otpStatus === 'verifying'}
                       className="px-4 py-3.5 text-xs font-semibold text-blue-500 hover:text-blue-600 disabled:opacity-50 flex-shrink-0">
                       {otpStatus === 'verifying' ? '확인 중...' : '확인'}
                     </button>
                   </div>
-                  {otpError && <p className="text-xs text-red-500 mt-1 pl-1">• {otpError}</p>}
+                  {otpError && <p className="text-xs text-red-500 mt-1 pl-1">{otpError}</p>}
                 </div>
               )}
 
-              {errors.id && <p className="text-xs text-red-500 mt-1 pl-1">• {errors.id}</p>}
-            </div>
+              {errors.id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.id}</p>}
           </div>
         </div>
 
         {/* 비밀번호 */}
-        <div className="mb-1">
-          <div className="flex items-start gap-2">
-            <CheckIcon />
-            <div className="flex-1">
-              <div className={`border rounded-xl overflow-hidden${pwError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
-                <div className="flex items-center">
+        <div className="mb-3">
+          <div className="min-w-0">
+              <div className={`border rounded-xl overflow-hidden w-full ${pwError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+                <div className="flex items-center h-[52px]">
                   <input type={showPw ? 'text' : 'password'} placeholder="비밀번호" value={password}
                     onChange={e => { setPassword(e.target.value); setPwTouched(true) }}
-                    className={`flex-1 px-4 py-3.5 text-sm focus:outline-none bg-transparent placeholder-gray-400 ${pwError ? 'text-red-500' : ''}`} />
-                  {pwError && <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded mr-1 whitespace-nowrap">사용불가</span>}
+                    className={`flex-1 min-w-0 px-4 h-full text-sm focus:outline-none bg-transparent placeholder:text-gray-300 ${pwError ? 'text-red-500' : ''}`} />
+                  {pwError && <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded mr-1 whitespace-nowrap shrink-0">사용불가</span>}
                   <button type="button" onClick={() => setShowPw(v => !v)} className="pr-4 bg-transparent text-gray-400 hover:text-gray-600 self-stretch flex items-center">
                     <EyeIcon open={showPw} />
                   </button>
                 </div>
               </div>
               {pwError
-                ? <p className="text-xs text-red-500 mt-1 pl-1">• {pwError}</p>
-                : <p className="text-xs text-gray-400 mt-1 pl-1">8~16자의 영문 대/소문자, 숫자, 특수문자</p>}
-            </div>
+                ? <p className="text-xs text-red-500 mt-1 pl-1">{pwError}</p>
+                : <p className="text-xs text-gray-400 mt-1 pl-1">8~16자의 영문 대/소문자, 숫자, 특수문자를 사용해 주세요.</p>}
           </div>
         </div>
 
         {/* 비밀번호 확인 */}
-        <div className="mb-3 mt-2">
-          <div className="flex items-start gap-2">
-            <CheckIcon />
-            <div className="flex-1">
-              <div className={`border rounded-xl overflow-hidden${pwConfirmError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
-                <div className="flex items-center">
+        <div className="mb-3">
+          <div className="min-w-0">
+              <div className={`border rounded-xl overflow-hidden ${pwConfirmError ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+                <div className="flex items-center h-[52px]">
                   <input type={showPwConfirm ? 'text' : 'password'} placeholder="비밀번호 확인" value={passwordConfirm}
                     onChange={e => { setPasswordConfirm(e.target.value); setPwConfirmTouched(true) }}
-                    className={`flex-1 px-4 py-3.5 text-sm focus:outline-none bg-transparent placeholder-gray-400 ${pwConfirmError ? 'text-red-500' : ''}`} />
+                    className={`flex-1 px-4 h-full text-sm focus:outline-none bg-transparent placeholder:text-gray-300 ${pwConfirmError ? 'text-red-500' : ''}`} />
                   <button type="button" onClick={() => setShowPwConfirm(v => !v)} className="pr-4 bg-transparent text-gray-400 hover:text-gray-600 self-stretch flex items-center">
                     <EyeIcon open={showPwConfirm} />
                   </button>
                 </div>
               </div>
-              {pwConfirmError && <p className="text-xs text-red-500 mt-1 pl-1">• {pwConfirmError}</p>}
-            </div>
+              {pwConfirmError
+                ? <p className="text-xs text-red-500 mt-1 pl-1">{pwConfirmError}</p>
+                : <p className="text-xs text-gray-400 mt-1 pl-1">비밀번호를 한 번 더 입력해 주세요.</p>}
           </div>
         </div>
 
+        <hr className="border-gray-100 my-4" />
+
         {/* 이름 */}
-        <div className="mb-3">
-          <div className="flex items-start gap-2">
-            <CheckIcon />
-            <div className="flex-1">
+        <div className="mb-2">
+          <div className="min-w-0">
               <div className={`border rounded-xl overflow-hidden ${errors.name ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <input type="text" placeholder="이름" value={name}
                   onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: '' })) }}
-                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder-gray-400" />
+                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder:text-gray-300" />
               </div>
               {errors.name
-                ? <p className="text-xs text-red-500 mt-1 pl-1">• {errors.name}</p>
+                ? <p className="text-xs text-red-500 mt-1 pl-1">{errors.name}</p>
                 : <p className="text-xs text-gray-400 mt-1 pl-1">실명으로 입력해 주세요.</p>
               }
-            </div>
           </div>
         </div>
 
         {/* 닉네임 */}
         <div className="mb-3">
-          <div className="flex items-start gap-2">
-            <CheckIcon />
-            <div className="flex-1">
-              <div className="flex items-center justify-end mb-1">
-                <CheckBadge status={nicknameStatus} />
-              </div>
-              <div className={`border rounded-xl overflow-hidden ${errors.nickname || nicknameStatus === 'taken' ? 'border-red-400' : nicknameStatus === 'available' ? 'border-blue-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
+          <div className="min-w-0">
+              {nicknameStatus !== 'idle' && (
+                <div className="flex items-center justify-end mb-1">
+                  <CheckBadge status={nicknameStatus} />
+                </div>
+              )}
+              <div className={`border rounded-xl overflow-hidden ${errors.nickname || nicknameStatus === 'taken' || (nicknameTouched && nicknameStatus !== 'available') ? 'border-red-400' : nicknameStatus === 'available' ? 'border-blue-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <input type="text" placeholder="닉네임" value={nickname}
-                  onChange={e => { setNickname(e.target.value); setNicknameStatus('idle'); setErrors(p => ({ ...p, nickname: '' })) }}
-                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder-gray-400" />
+                  onChange={e => { setNickname(e.target.value); setNicknameStatus('idle'); setNicknameTouched(true); setErrors(p => ({ ...p, nickname: '' })) }}
+                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder:text-gray-300" />
               </div>
               <button type="button" onClick={checkNickname} disabled={nicknameStatus === 'checking' || nicknameStatus === 'available'}
                 className={`mt-1.5 w-full py-2 rounded-lg text-xs font-medium transition-colors ${nicknameStatus === 'available' ? 'bg-blue-50 text-blue-500 cursor-default' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50'}`}>
                 {nicknameStatus === 'available' ? '✓ 사용 가능' : nicknameStatus === 'checking' ? '확인 중...' : '중복확인'}
               </button>
               {errors.nickname
-                ? <p className="text-xs text-red-500 mt-1 pl-1">• {errors.nickname}</p>
-                : <p className="text-xs text-gray-400 mt-1 pl-1">서비스 내 표시 이름</p>
+                ? <p className="text-xs text-red-500 mt-1 pl-1">{errors.nickname}</p>
+                : nicknameTouched && nicknameStatus !== 'available'
+                  ? <p className="text-xs text-red-500 mt-1 pl-1">중복확인이 필요해요</p>
+                  : <p className="text-xs text-gray-400 mt-1 pl-1">서비스에 표시될 이름이에요.</p>
               }
-            </div>
           </div>
         </div>
 
         {/* 생년월일 */}
         <div className="mb-3">
-          <div className="flex items-start gap-2">
-            <CheckIcon />
-            <div className="flex-1">
+          <div className="min-w-0">
               <div className={`border rounded-xl overflow-hidden ${(errors.birthdate || (birthdate.length > 0 && birthdate.length < 8)) ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <input type="text" inputMode="numeric" placeholder="생년월일 8자리 (예: 19900101)" value={birthdate}
                   onChange={e => { setBirthdate(e.target.value.replace(/\D/g, '').slice(0, 8)); setErrors(p => ({ ...p, birthdate: '' })) }}
-                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder-gray-400" />
+                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder:text-gray-300" />
               </div>
               {(errors.birthdate || (birthdate.length > 0 && birthdate.length < 8)) && (
-                <p className="text-xs text-red-500 mt-1 pl-1">• 숫자 8자리 형식으로 입력해주세요.</p>
+                <p className="text-xs text-red-500 mt-1 pl-1">숫자 8자리 형식으로 입력해 주세요.</p>
               )}
-            </div>
           </div>
         </div>
 
         {/* 성별 */}
         <div className="mb-3">
-          <div className="flex items-start gap-2">
-            <CheckIcon />
-            <div className="flex-1">
+          <div className="min-w-0">
               <div className="flex gap-2">
                 {(['M', 'F'] as const).map(g => (
                   <button key={g} type="button" onClick={() => { setGender(g); setErrors(p => ({ ...p, gender: '' })) }}
@@ -425,30 +402,27 @@ export default function SignupPage() {
                   </button>
                 ))}
               </div>
-              {errors.gender && <p className="text-xs text-red-500 mt-1 pl-1">• {errors.gender}</p>}
-            </div>
+              {errors.gender && <p className="text-xs text-red-500 mt-1 pl-1">{errors.gender}</p>}
           </div>
         </div>
 
+        <hr className="border-gray-100 my-4" />
+
         {/* 휴대전화번호 (필수) */}
         <div className="mb-3">
-          <div className="flex items-start gap-2">
-            <CheckIcon />
-            <div className="flex-1">
+          <div className="min-w-0">
               <div className={`border rounded-xl overflow-hidden ${errors.phone ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
                 <input type="tel" inputMode="numeric" placeholder="휴대전화번호" value={phone}
                   onChange={e => { setPhone(formatPhone(e.target.value)); setErrors(p => ({ ...p, phone: '' })) }}
-                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder-gray-400" />
+                  className="w-full px-4 py-3.5 text-sm focus:outline-none placeholder:text-gray-300" />
               </div>
-              {errors.phone && <p className="text-xs text-red-500 mt-1 pl-1">• {errors.phone}</p>}
-            </div>
+              {errors.phone && <p className="text-xs text-red-500 mt-1 pl-1">{errors.phone}</p>}
           </div>
         </div>
 
         {/* 약관 동의 */}
-        <div className="flex items-start gap-2 mb-2">
-          <CheckIcon />
-          <div className="flex-1 min-w-0">
+        <div className="mb-2">
+          <div className="min-w-0">
             <div className={`border rounded-xl overflow-hidden ${errors.terms ? 'border-red-400' : 'border-gray-300 hover:border-gray-400 focus-within:border-blue-500'}`}>
               <button type="button" onClick={() => setTermsOpen(v => !v)}
                 className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors">
@@ -479,12 +453,12 @@ export default function SignupPage() {
                 </div>
               )}
             </div>
-            {errors.terms && <p className="text-xs text-red-500 mt-1 pl-1">• {errors.terms}</p>}
+            {errors.terms && <p className="text-xs text-red-500 mt-1 pl-1">{errors.terms}</p>}
           </div>
         </div>
         {errors.submit && <p className="text-sm text-center text-red-500 mb-3">{errors.submit}</p>}
 
-        <button type="button" onClick={handleSignup} disabled={loading}
+        <button type="button" onClick={handleSignup} disabled={loading || nicknameStatus !== 'available' || otpStatus !== 'verified'}
           className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-semibold hover:bg-blue-600 active:bg-blue-700 disabled:opacity-50 transition-colors mb-4 mt-2">
           {loading ? '처리 중...' : '회원가입'}
         </button>

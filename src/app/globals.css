@@ -23,3 +23,8 @@ body {
   color: var(--foreground);
   font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+
+.placeholder-light::placeholder {
+  color: #d1d5db !important;
+  opacity: 1 !important;
+}

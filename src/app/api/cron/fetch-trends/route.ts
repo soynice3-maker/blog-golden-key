@@ -10,8 +10,8 @@ const CATEGORIES = [
 ]
 
 // 카테고리별 시드 키워드 최대 수 (DataLab 배치: 5그룹/요청)
-const SEEDS_PER_CATEGORY = 20
-const TOP_N = 10
+const SEEDS_PER_CATEGORY = 30
+const TOP_N = 25
 
 function adminClient() {
   return createClient(

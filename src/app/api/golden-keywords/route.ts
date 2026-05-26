@@ -17,8 +17,6 @@ export async function GET(request: NextRequest) {
     .select('keyword, pc_volume, mobile_volume, total_volume, blog_count, competition_label, trend_score', { count: 'exact' })
     .eq('category', category)
     .gte('total_volume', 1000)
-    .lte('total_volume', 10000)
-    .gte('blog_count', 100)
     .in('competition_label', ['매우좋음', '좋음'])
     .order('competition_ratio', { ascending: true })
     .range(offset, offset + 9)

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
   const { email } = await req.json()
-  if (!email) return NextResponse.json({ available: false, message: '아이디를 입력해주세요.' })
+  if (!email) return NextResponse.json({ available: false, message: '아이디를 입력해 주세요.' })
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!serviceKey) {

@@ -56,7 +56,7 @@ export default function LoginPage() {
     if (mode === 'findId') {
       if (!findName || findPhone.replace(/\D/g, '').length < 10) {
         setMessageType('error')
-        setMessage('이름과 휴대전화번호를 모두 입력해주세요.')
+        setMessage('이름과 휴대전화번호를 모두 입력해 주세요.')
         setLoading(false)
         return
       }
