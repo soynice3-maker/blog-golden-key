@@ -73,17 +73,97 @@ function extractDicArea(html: string): string {
   return ''
 }
 
-async function crawlNaverArticle(url: string): Promise<string> {
-  if (!url.includes('naver.com')) return ''
+function extractByClass(html: string, className: string): string {
+  const marker = `class="${className}"`
+  const altMarker = `class="${className} `
+  let startIdx = html.indexOf(marker)
+  if (startIdx < 0) startIdx = html.indexOf(altMarker)
+  if (startIdx < 0) return ''
+  const openEnd = html.indexOf('>', startIdx)
+  if (openEnd < 0) return ''
+  let depth = 1
+  let pos = openEnd + 1
+  while (pos < html.length && depth > 0) {
+    const nextOpen = html.indexOf('<div', pos)
+    const nextClose = html.indexOf('</div>', pos)
+    if (nextClose < 0) break
+    if (nextOpen >= 0 && nextOpen < nextClose) { depth++; pos = nextOpen + 4 }
+    else { depth--; if (depth === 0) return stripHtml(html.slice(openEnd + 1, nextClose)).replace(/\s+/g, ' ').trim(); pos = nextClose + 6 }
+  }
+  return ''
+}
+
+function normalizeNewsUrl(url: string): string {
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36' },
+    const u = new URL(url)
+    if (u.hostname === 'news.naver.com') {
+      const oid = u.searchParams.get('oid')
+      const aid = u.searchParams.get('aid')
+      if (oid && aid) return `https://n.news.naver.com/mnews/article/${oid}/${aid}`
+    }
+    if (u.hostname.endsWith('.naver.com')) {
+      const m = u.pathname.match(/\/article\/(\d+)\/(\d+)/)
+      if (m) return `https://n.news.naver.com/mnews/article/${m[1]}/${m[2]}`
+    }
+  } catch {}
+  return url
+}
+
+function extractById(html: string, id: string): string {
+  const marker = `id="${id}"`
+  const startIdx = html.indexOf(marker)
+  if (startIdx < 0) return ''
+  const openEnd = html.indexOf('>', startIdx)
+  if (openEnd < 0) return ''
+  let depth = 1, pos = openEnd + 1
+  while (pos < html.length && depth > 0) {
+    const nextOpen = html.indexOf('<div', pos)
+    const nextClose = html.indexOf('</div>', pos)
+    if (nextClose < 0) break
+    if (nextOpen >= 0 && nextOpen < nextClose) { depth++; pos = nextOpen + 4 }
+    else { depth--; if (depth === 0) return stripHtml(html.slice(openEnd + 1, nextClose)).replace(/\s+/g, ' ').trim(); pos = nextClose + 6 }
+  }
+  return ''
+}
+
+const META_PATTERN = /기자\s*[=｜|]|입력\s*[:：]|수정\s*[:：]|조회수|ⓒ|©|무단전재|저작권|Copyright|\d{4}\.\s*\d{1,2}\.\s*\d{1,2}/
+
+function extractParagraphs(html: string): string {
+  // 한국 뉴스 사이트 공통 컨테이너 먼저 시도
+  for (const id of ['articleBodyContents', 'article_txt', 'newsEndContents', 'articleBody', 'article-view-content-div', 'news_body_area']) {
+    const body = extractById(html, id)
+    if (body.length > 100) return body
+  }
+  // fallback: <p> 태그 필터링 추출
+  const parts: string[] = []
+  const re = /<p[^>]*>([\s\S]*?)<\/p>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) {
+    const t = stripHtml(m[1]).trim()
+    if (t.length < 30 || META_PATTERN.test(t)) continue
+    parts.push(t)
+    if (parts.join(' ').length > 1200) break
+  }
+  return parts.join(' ')
+}
+
+async function crawlArticle(url: string): Promise<string> {
+  if (!url.startsWith('http')) return ''
+  const targetUrl = normalizeNewsUrl(url)
+  try {
+    const res = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ko-KR,ko;q=0.9',
+        'Referer': 'https://www.naver.com/',
+      },
+      redirect: 'follow',
       signal: AbortSignal.timeout(6000),
     })
     if (!res.ok) return ''
     const html = await res.text()
-    const body = extractDicArea(html)
-    return body.slice(0, 1500)
+    return (extractDicArea(html) || extractByClass(html, 'newsct_article _article_body') || extractByClass(html, 'go_trans _article_content') || extractParagraphs(html)).slice(0, 1500)
   } catch {
     return ''
   }
@@ -195,7 +275,7 @@ export async function POST(request: NextRequest) {
   // 뉴스 기사 본문 크롤링 (첫 번째 성공한 기사)
   let articleBody = ''
   for (const item of newsHeadlines) {
-    const body = await crawlNaverArticle(item.link)
+    const body = await crawlArticle(item.link)
     if (body.length > 80) { articleBody = body; break }
   }
 

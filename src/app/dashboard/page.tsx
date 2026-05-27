@@ -664,6 +664,8 @@ export default function DashboardPage() {
   const [feedTitleDir, setFeedTitleDir] = useState('감성형')
   const [feedStyle, setFeedStyle] = useState('스토리텔링')
   const [newsExpandedItem, setNewsExpandedItem] = useState<string | null>(null)
+  const [articleBodyExpanded, setArticleBodyExpanded] = useState(true)
+  const [includeArticleInPrompt, setIncludeArticleInPrompt] = useState(true)
 
   const [nicheDetailSlug, setNicheDetailSlug] = useState<string | null>(null)
   const [nicheDetailTab, setNicheDetailTab] = useState<'hot-posts' | 'pain-points'>('hot-posts')
@@ -1042,7 +1044,7 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: feedTopic,
-          snippet: feedSnippet,
+          snippet: includeArticleInPrompt ? feedSnippet : '',
           notes: feedNotes,
           titleDir: feedTitleDir,
           style: feedStyle,
@@ -1450,13 +1452,6 @@ export default function DashboardPage() {
                   )}
                 </div>
               )}
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">다루고 싶은 내용 <span className="text-gray-400 font-normal">(선택)</span></label>
-                <textarea value={feedNotes} onChange={e => setFeedNotes(e.target.value)} rows={6}
-                  placeholder={`예:\n이 주제에 대한 나의 직접 경험\n가장 강조하고 싶은 포인트\n독자에게 전하고 싶은 메시지\n이 글을 쓰게 된 계기`}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 mt-1">내 시각·경험·의견을 적으면 더 개성 있는 프롬프트가 만들어져요</p>
-              </div>
               <button onClick={analyzeFeedTopic} disabled={!feedTopic.trim()}
                 className="w-full py-3 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                 다음
@@ -1534,7 +1529,7 @@ export default function DashboardPage() {
                         <span className="ml-auto text-[10px] font-medium bg-green-50 text-green-600 px-2 py-0.5 rounded-full">기사 내용 자동 수집됨</span>
                       )}
                     </p>
-                    <ul className="space-y-4">
+                    <ul className="space-y-6">
                       {feedAnalysis.newsHeadlines.map((item: { title: string; link: string; pubDate: string }, i: number) => (
                         <li key={i}>
                           <a href={item.link} target="_blank" rel="noopener noreferrer"
@@ -1548,16 +1543,26 @@ export default function DashboardPage() {
                         </li>
                       ))}
                     </ul>
-                    <div className="mt-4 flex flex-col items-center">
-                      <ChevronRight className="w-4 h-4 text-gray-300 my-1 rotate-90" />
-                      <p className="text-xs text-gray-500 mb-2 text-center">다루고 싶은 내용</p>
-                      <textarea
-                        value={feedNotes}
-                        onChange={e => setFeedNotes(e.target.value)}
-                        rows={3}
-                        className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300"
-                        placeholder="뉴스를 보고 다루고 싶은 내용을 적어주세요"
-                      />
+                    <div className="mt-5 flex flex-col items-center">
+                      <button
+                        onClick={() => feedAnalysis?.articleBody && setArticleBodyExpanded(p => !p)}
+                        className={`transition-colors ${feedAnalysis?.articleBody ? 'text-gray-300 hover:text-gray-400 cursor-pointer' : 'text-gray-200 cursor-default'}`}
+                      >
+                        <ChevronRight className={`w-4 h-4 transition-transform ${articleBodyExpanded ? '-rotate-90' : 'rotate-90'}`} />
+                      </button>
+                      {articleBodyExpanded && feedAnalysis?.articleBody && (
+                        <div className="w-full mt-2">
+                          <div className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3 leading-relaxed max-h-44 overflow-y-auto">
+                            {feedAnalysis.articleBody}
+                          </div>
+                          <div className="flex justify-end mt-2">
+                            <button onClick={() => setIncludeArticleInPrompt(p => !p)}
+                              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${includeArticleInPrompt ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
+                              {includeArticleInPrompt ? '프롬프트에 포함 중' : '프롬프트에서 제외됨'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1664,6 +1669,19 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 )}
+
+                {/* 다루고 싶은 내용 */}
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <p className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><PenLine className="w-3.5 h-3.5" /> 더 담고 싶은 내용</p>
+                  <p className="text-xs text-gray-400 mb-4">내 시각·경험·의견을 적으면 더 개성 있는 프롬프트가 만들어져요</p>
+                  <textarea
+                    value={feedNotes}
+                    onChange={e => setFeedNotes(e.target.value)}
+                    rows={4}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300"
+                    placeholder={`예:\n이 주제에 대한 나의 직접 경험\n가장 강조하고 싶은 포인트\n독자에게 전하고 싶은 메시지`}
+                  />
+                </div>
 
                 {feedError && <p className="text-sm text-red-400 pl-1">{feedError}</p>}
 
