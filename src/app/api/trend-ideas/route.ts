@@ -10,7 +10,7 @@ const CATEGORY_KR: Record<string, string> = {
   tech_it: 'IT테크', auto: '자동차', living: '리빙', parenting: '육아',
   health: '생활건강', game: '게임', pet: '동물·펫', sports: '운동·레저',
   entertain: '방송·연예', movie: '영화', book: '도서',
-  business: '경제·비즈니스', education: '어학·교육',
+  business: '경제·비즈니스', education: '어학·교육', wedding: '웨딩',
 }
 
 const TITLE_EXAMPLES: Record<string, string[]> = {

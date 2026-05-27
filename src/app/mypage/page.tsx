@@ -165,6 +165,12 @@ setUserEmail(user.email ?? '')
       </header>
 
       <main className="max-w-lg mx-auto px-6 py-10 space-y-6">
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-700 transition-colors"
+        >
+          ← 뒤로
+        </button>
         <h1 className="text-xl font-bold">마이페이지</h1>
 
         {/* 프로필 수정 */}

@@ -6,7 +6,7 @@ import { getDailyTrendingKeywords } from '@/lib/google-trends'
 const CATEGORIES = [
   'travel', 'fashion', 'beauty', 'food', 'tech_it', 'auto', 'living',
   'parenting', 'health', 'game', 'pet', 'sports', 'entertain', 'movie',
-  'book', 'business', 'education',
+  'book', 'business', 'education', 'wedding',
 ]
 
 // 카테고리별 시드 키워드 최대 수 (DataLab 배치: 5그룹/요청)

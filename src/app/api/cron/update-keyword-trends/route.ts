@@ -5,7 +5,7 @@ import { getTrendingKeywords } from '@/lib/naver-datalab'
 const CATEGORIES = [
   'travel', 'fashion', 'beauty', 'food', 'tech_it', 'auto', 'living',
   'parenting', 'health', 'game', 'pet', 'sports', 'entertain', 'movie',
-  'book', 'business', 'education',
+  'book', 'business', 'education', 'wedding',
 ]
 const KEYWORDS_PER_CATEGORY = 25
 

@@ -1010,6 +1010,7 @@ export default function DashboardPage() {
       const data = await res.json()
       if (res.ok) {
         setFeedAnalysis(data)
+        if (data.articleBody) setFeedSnippet(data.articleBody)
         // 뉴스 헤드라인 키워드 기반 추천
         const headlineText = (data.newsHeadlines || []).map((h: any) => h.title).join(' ')
         const controversyWords = ['논란', '폭로', '경고', '사태', '위기', '충격', '의혹', '갈등', '비판', '규탄', '반발', '거부', '파문', '고발', '폭탄']
@@ -1527,7 +1528,12 @@ export default function DashboardPage() {
                 {/* 최신 뉴스 헤드라인 */}
                 {feedAnalysis?.newsHeadlines?.length > 0 && (
                   <div className="bg-white rounded-2xl p-5 shadow-sm">
-                    <p className="text-xs font-semibold text-gray-800 mb-5 flex items-center gap-1.5"><Newspaper className="w-3.5 h-3.5" /> 지금 이 주제 뉴스</p>
+                    <p className="text-xs font-semibold text-gray-800 mb-5 flex items-center gap-1.5">
+                      <Newspaper className="w-3.5 h-3.5" /> 지금 이 주제 뉴스
+                      {feedAnalysis?.articleBody && (
+                        <span className="ml-auto text-[10px] font-medium bg-green-50 text-green-600 px-2 py-0.5 rounded-full">기사 내용 자동 수집됨</span>
+                      )}
+                    </p>
                     <ul className="space-y-4">
                       {feedAnalysis.newsHeadlines.map((item: { title: string; link: string; pubDate: string }, i: number) => (
                         <li key={i}>

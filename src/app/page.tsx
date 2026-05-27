@@ -26,11 +26,11 @@ export default function LandingPage() {
 
   const handleAnalyze = () => {
     if (!user) {
-      router.replace('/login?tab=signup')
+      router.push('/login?tab=signup')
       return
     }
     if (isTrialExpired(user)) {
-      router.replace('/login')
+      router.push('/login')
       return
     }
     router.replace('/dashboard')

@@ -230,6 +230,14 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center px-4 py-12">
+      <div className="w-full max-w-sm mb-2">
+        <button
+          onClick={() => window.history.back()}
+          className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-700 transition-colors"
+        >
+          ← 뒤로
+        </button>
+      </div>
       <Link href="/" className="mb-6 block text-center">
         <div className="text-2xl font-bold text-gray-900 flex items-center gap-1.5">블로그황금키 <Key className="w-6 h-6 text-yellow-400" /></div>
       </Link>

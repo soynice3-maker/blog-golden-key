@@ -18,12 +18,22 @@ async function checkAdmin() {
   return user
 }
 
-// 카테고리별 시드 통계 조회
-export async function GET() {
+// 카테고리별 시드 통계 조회 / 카테고리 내 키워드 목록
+export async function GET(request: NextRequest) {
   const user = await checkAdmin()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = adminClient()
+  const category = request.nextUrl.searchParams.get('category')
+
+  if (category) {
+    const { data: seeds } = await supabase
+      .from('seed_keywords')
+      .select('id, keyword, built_at')
+      .eq('category', category)
+      .order('keyword')
+    return NextResponse.json({ seeds: seeds || [] })
+  }
 
   const { data: seeds } = await supabase
     .from('seed_keywords')
@@ -82,10 +92,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: '모두 이미 존재하는 시드예요', added: 0 })
   }
 
-  const rows = newKeywords.map(keyword => ({ keyword, category }))
+  const rows = newKeywords.map(keyword => ({ keyword, category, source: 'admin' }))
   const { error } = await supabase.from('seed_keywords').insert(rows)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({ added: newKeywords.length, skipped: keywordList.length - newKeywords.length })
+}
+
+// 시드 삭제
+export async function DELETE(request: NextRequest) {
+  const user = await checkAdmin()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await request.json()
+  if (!id) return NextResponse.json({ error: 'id가 필요합니다' }, { status: 400 })
+
+  const supabase = adminClient()
+  const { error } = await supabase.from('seed_keywords').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ success: true })
 }

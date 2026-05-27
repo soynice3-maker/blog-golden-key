@@ -44,7 +44,49 @@ function avgRatio(data: any[] | undefined | null): number {
 }
 
 function stripHtml(str: string): string {
-  return str.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#x27;/g, "'")
+  return str.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+}
+
+function extractDicArea(html: string): string {
+  const marker = 'id="dic_area"'
+  const startIdx = html.indexOf(marker)
+  if (startIdx < 0) return ''
+  const openEnd = html.indexOf('>', startIdx)
+  if (openEnd < 0) return ''
+  let depth = 1
+  let pos = openEnd + 1
+  while (pos < html.length && depth > 0) {
+    const nextOpen = html.indexOf('<div', pos)
+    const nextClose = html.indexOf('</div>', pos)
+    if (nextClose < 0) break
+    if (nextOpen >= 0 && nextOpen < nextClose) {
+      depth++
+      pos = nextOpen + 4
+    } else {
+      depth--
+      if (depth === 0) {
+        return stripHtml(html.slice(openEnd + 1, nextClose)).replace(/\s+/g, ' ').trim()
+      }
+      pos = nextClose + 6
+    }
+  }
+  return ''
+}
+
+async function crawlNaverArticle(url: string): Promise<string> {
+  if (!url.includes('naver.com')) return ''
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36' },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!res.ok) return ''
+    const html = await res.text()
+    const body = extractDicArea(html)
+    return body.slice(0, 1500)
+  } catch {
+    return ''
+  }
 }
 
 function formatDate(d: Date) {
@@ -150,6 +192,13 @@ export async function POST(request: NextRequest) {
   const common = ['일상', '블로그', '정보', '이슈', '추천']
   const hashtags = [...new Set([...allWords, ...common])].slice(0, 12)
 
+  // 뉴스 기사 본문 크롤링 (첫 번째 성공한 기사)
+  let articleBody = ''
+  for (const item of newsHeadlines) {
+    const body = await crawlNaverArticle(item.link)
+    if (body.length > 80) { articleBody = body; break }
+  }
+
   return NextResponse.json({
     genderRatio,
     ageRatio,
@@ -157,5 +206,6 @@ export async function POST(request: NextRequest) {
     blogCount,
     searchVolume,
     hashtags,
+    articleBody,
   })
 }

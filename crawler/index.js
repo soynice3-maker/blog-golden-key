@@ -400,6 +400,97 @@ app.get('/analyze-top-posts', async (req, res) => {
   }
 })
 
+app.get('/top-titles', async (req, res) => {
+  const keyword = req.query.keyword
+  if (!keyword) return res.json({ error: '키워드 없음' })
+
+  const cached = getCached(`titles:${keyword}`)
+  if (cached) return res.json(cached)
+
+  const browser = await browserPool.acquire()
+  let context
+  let crashed = false
+
+  try {
+    context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      locale: 'ko-KR',
+    })
+    const page = await context.newPage()
+
+    await page.goto(
+      `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(keyword)}`,
+      { waitUntil: 'domcontentloaded', timeout: 15000 }
+    )
+
+    try {
+      await page.waitForSelector('h2.sds-comps-text, #main_pack', { timeout: 5000 })
+    } catch {
+      await page.waitForTimeout(2000)
+    }
+
+    const titles = await page.evaluate(() => {
+      const results = []
+      const isRealPost = (href) =>
+        /blog\.naver\.com\/[^/?]+\/\d+/.test(href) ||
+        /in\.naver\.com\/[^/?]+\/contents\/internal\/\d+/.test(href)
+
+      const blockTitles = document.querySelectorAll('h2.sds-comps-text')
+      blockTitles.forEach(titleEl => {
+        const blockName = titleEl.textContent?.trim()
+        if (!blockName) return
+        if (blockName.includes('클립') || blockName.includes('Clip')) return
+
+        let container = titleEl.parentElement
+        for (let i = 0; i < 4; i++) {
+          if (!container) break
+          container = container.parentElement
+        }
+        if (!container) return
+
+        const seen = new Set()
+        Array.from(container.querySelectorAll('a'))
+          .filter(a => isRealPost(a.href))
+          .filter(a => { if (seen.has(a.href)) return false; seen.add(a.href); return true })
+          .slice(0, 3)
+          .forEach(a => {
+            const attrTitle = a.getAttribute('title')?.trim()
+            const textTitle = a.textContent?.trim().slice(0, 100)
+            const title = attrTitle || (textTitle && !textTitle.includes('›') && !textTitle.includes('.naver.com') && !textTitle.includes('.com') ? textTitle : null)
+            if (title) results.push({ title, blockName })
+          })
+      })
+
+      if (results.length === 0) {
+        const seen = new Set()
+        Array.from(document.querySelectorAll('a'))
+          .filter(a => isRealPost(a.href))
+          .filter(a => { if (seen.has(a.href)) return false; seen.add(a.href); return true })
+          .slice(0, 5)
+          .forEach(a => {
+            const attrTitle = a.getAttribute('title')?.trim()
+            const textTitle = a.textContent?.trim().slice(0, 100)
+            const title = attrTitle || (textTitle && !textTitle.includes('›') && !textTitle.includes('.naver.com') ? textTitle : null)
+            if (title) results.push({ title, blockName: 'VIEW' })
+          })
+      }
+
+      return results
+    })
+
+    await context.close()
+    const result = { keyword, titles }
+    setCached(`titles:${keyword}`, result, TTL_SHORTENTS)
+    res.json(result)
+  } catch (e) {
+    crashed = true
+    if (context) try { await context.close() } catch {}
+    res.json({ keyword, titles: [], error: e.message })
+  } finally {
+    await browserPool.release(browser, crashed)
+  }
+})
+
 app.get('/extract-place', async (req, res) => {
   let targetUrl = req.query.url
   if (!targetUrl) return res.json({ error: 'URL 없음' })
@@ -693,7 +784,7 @@ app.get('/news-ranking', async (req, res) => {
           .replace(/\s+/g, ' ').trim()
         if (title.length >= 8 && title.length <= 80 && /[가-힣]/.test(title) && !seen.has(title)) {
           seen.add(title)
-          result.push(title)
+          result.push({ title, url: a.href })
         }
       })
 

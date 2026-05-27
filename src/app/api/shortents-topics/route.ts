@@ -23,6 +23,7 @@ const SHORTENTS_CATEGORIES: Record<string, string | null> = {
   pet: null,
   book: null,
   education: null,
+  wedding: null,
 }
 
 export async function GET(request: NextRequest) {
