@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { BarChart2, Trophy, TrendingUp, Newspaper, Key, Tag, FileText, Smartphone, Link2, Hash, Lightbulb, PenLine, Copy, Flame, RefreshCw, Zap, Search, Calendar, Pencil, Plane, Shirt, Sparkles, Utensils, Monitor, Car, Home, Baby, Heart, Gamepad2, PawPrint, Dumbbell, Tv, Film, BookOpen, Briefcase, GraduationCap, User, LogOut, ChevronRight, Info, type LucideIcon } from 'lucide-react'
+import { BarChart2, Trophy, TrendingUp, Newspaper, Key, Tag, FileText, Smartphone, Link2, Hash, Lightbulb, PenLine, Copy, Flame, RefreshCw, Zap, Search, Calendar, Pencil, Plane, Shirt, Sparkles, Utensils, Monitor, Car, Home, Baby, Heart, Gamepad2, PawPrint, Dumbbell, Tv, Film, BookOpen, Briefcase, GraduationCap, Gem, User, LogOut, ChevronRight, Info, Circle, type LucideIcon } from 'lucide-react'
 
 const WordCloud = dynamic(() => import('react-d3-cloud'), { ssr: false })
 
@@ -91,6 +91,7 @@ const CATEGORIES: { id: string; label: string; icon: LucideIcon; color: string }
   { id: 'book', label: '도서', icon: BookOpen, color: 'text-emerald-500' },
   { id: 'business', label: '경제·비즈니스', icon: Briefcase, color: 'text-blue-600' },
   { id: 'education', label: '어학·교육', icon: GraduationCap, color: 'text-teal-500' },
+  { id: 'wedding', label: '웨딩', icon: Gem, color: 'text-pink-400' },
 ]
 
 interface CrawlPost {
@@ -305,21 +306,7 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = '', originalInp
     return intro.includes(kwLowerNospace)
   }).length
 
-  // ── 연관 키워드 빈도 (관련 글만)
-  const wordFreq: Record<string, number> = {}
-  const allText = analyzePosts.map(p => p.fullText || '').join(' ')
-  const words = allText.match(/[가-힣]{2,6}/g) || []
-  words.forEach(w => {
-    if (STOP_WORDS.has(w)) return
-    if (kwNospace.includes(w) || w.includes(kwNospace)) return
-    if (kw.split(/\s+/).some(part => part.length >= 2 && w.includes(part))) return
-    wordFreq[w] = (wordFreq[w] || 0) + 1
-  })
-  const relatedKeywords = Object.entries(wordFreq)
-    .filter(([, c]) => c >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([word, count]) => ({ word, count }))
+  const relatedKeywords: { word: string; count: number }[] = []
 
   // ── 평균 구조
   const avg = cd.average
@@ -361,7 +348,7 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = '', originalInp
 
   // 키워드 밀도
   if (avgKwDensity > 0)
-    insights.push(`키워드 밀도 평균 ${avgKwDensity}‰ (1000자당 ${avgKwDensity}회) — 과도한 반복 없이 ${avgKwCount}회 자연스럽게 분산`)
+    insights.push(`키워드 밀도 평균 ${avgKwDensity}‰ (1,000자당 ${avgKwDensity}회) — 과도한 반복 없이 ${avgKwCount}회 자연스럽게 분산`)
 
   // 인트로 위치
   if (introKwCount === posts.length && posts.length > 0)
@@ -425,8 +412,6 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = '', originalInp
     contentPoints.push(`인트로 초반 200자 내 키워드 "${kwForm}" 등장 권장`)
   if (avgKwCount > 0)
     contentPoints.push(`키워드 "${kwForm}" 본문 내 ${avgKwCount}회 이상 자연스럽게 반복 (밀도 ${avgKwDensity}‰)`)
-  if (relatedKeywords.length > 0)
-    contentPoints.push(`연관 키워드 분산 배치: ${relatedKeywords.slice(0, 4).map(r => r.word).join(', ')}`)
 
   // ── 해시태그 (V3: 키워드 관련성 필터 추가)
   const hashtagFreq: Record<string, number> = {}
@@ -445,7 +430,6 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = '', originalInp
     ...kw.split(/\s+/).filter(w => w.length >= 2).map(w => w.toLowerCase()),
     ...inputWords,
     ...(brandLower ? brandLower.split(/\s+/).filter(w => w.length >= 2) : []),
-    ...relatedKeywords.slice(0, 8).map(r => r.word.toLowerCase()),
   ]
 
   let topHashtags = Object.entries(hashtagFreq)
@@ -458,13 +442,12 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = '', originalInp
     .slice(0, 15)
     .map(([tag, count]) => ({ tag, count }))
 
-  // 5개 미만이면 연관 키워드로 보완
+  // 5개 미만이면 키워드로 보완
   if (topHashtags.length < 5) {
     const existing = new Set(topHashtags.map(h => h.tag))
     const candidates = [
       kwNospace,
       ...kw.split(/\s+/).filter(p => p.length >= 2),
-      ...relatedKeywords.map(r => r.word),
     ]
       .map(t => cleanTag(t))
       .filter(t => t.length >= 2)
@@ -493,16 +476,15 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = '', originalInp
   }
 }
 
-function buildPrompt(keyword: string, subKeywords: string, topic: string, notes: string, kd: KeywordResult | null, cd: CrawlData | null, analysis: Analysis | null) {
+function buildPrompt(keyword: string, subKeywords: string, topic: string, notes: string, kd: KeywordResult | null, cd: CrawlData | null, analysis: Analysis | null, postType: 'review' | 'info' | 'simple' | '' = '') {
   const kw = keyword.trim()
   const a = analysis
   const titles = cd?.allTitles?.slice(0, 5).map((t, i) => `  ${i + 1}. ${t.title}`) || []
-  const related = a?.relatedKeywords.slice(0, 10).map(r => r.word).join(', ') || ''
   const blocks = a?.smartBlocks.join(', ') || '블로그 VIEW'
   const hashtags = a?.topHashtags.slice(0, 10).map(h => `#${h.tag}`).join(' ') || ''
   const insightLines = a?.insights.map(ins => `• ${ins}`).join('\n') || ''
-  const titlePoints = a?.strategy.titleStructure.map(t => `  - ${t}`).join('\n') || ''
-  const contentPoints = a?.strategy.contentPoints.map(p => `  - ${p}`).join('\n') || ''
+  const titlePoints = a?.strategy.titleStructure.map(t => `- ${t}`).join('\n') || ''
+  const contentPoints = a?.strategy.contentPoints.map(p => `- ${p}`).join('\n') || ''
 
   const subKwLine = subKeywords.trim()
     ? `\n서브 키워드: ${subKeywords.trim().split(/[,，\s]+/).filter(Boolean).join(', ')}`
@@ -512,9 +494,17 @@ function buildPrompt(keyword: string, subKeywords: string, topic: string, notes:
   const kwPos = a && a.frontCount >= (a.titleTotal || 1) * 0.5 ? '앞부분' : '중반부'
   const kwForm = a && a.joinedCount > a.spacedCount ? kw.replace(/\s/g, '') : kw
 
+  const postTypeGuide = postType === 'review'
+    ? '글 유형: 후기·리뷰 — 직접 방문·사용한 경험을 중심으로, 솔직하고 생생한 구어체로 서술'
+    : postType === 'info'
+    ? '글 유형: 정보·가이드 — 독자에게 유용한 정보 중심으로, 명확하고 신뢰감 있는 문체로 구성'
+    : postType === 'simple'
+    ? '글 유형: 일상·기록 — 자연스러운 일상 기록 형식으로, 편안한 구어체로 서술'
+    : ''
+
   return `네이버 SEO 상위노출 블로그 글 작성 요청
 
-키워드: ${kw}${subKwLine}${topic ? `\n주제: ${topic}` : ''}
+키워드: ${kw}${subKwLine}${topic ? `\n주제: ${topic}` : ''}${postTypeGuide ? `\n${postTypeGuide}` : ''}
 
 ━━━ 제목 작성 ━━━
 [분석 데이터]
@@ -528,8 +518,7 @@ ${titles.join('\n') || '  (없음)'}
 
 [제목 작성 규칙]
 - 위 참고 제목들을 표절하지 말고 패턴만 참고해서 완전히 새로운 제목을 써줘
-- 키워드 '${kwForm}'를 제목 ${kwPos}에 배치, ${a?.avgTitleLength || 20}자 내외
-${titlePoints ? titlePoints : ''}
+${titlePoints}
 
 ━━━ 본문 작성 ━━━
 [알고리즘 분석]
@@ -546,15 +535,10 @@ ${insightLines || '  (없음)'}
 [작성 포인트]
 ${contentPoints || '  (없음)'}
 
-[연관 키워드 — 본문에 자연스럽게 녹이기]
-${related}
-
 [작성 규칙]
-- 인트로: 첫 200자 내 키워드 자연스럽게 등장${a && a.postsAnalyzed > 0 && a.introKwCount === a.postsAnalyzed ? ' (상위노출 글 전체 공통, 필수)' : a && a.introKwCount > 0 ? ' (상위노출 글 다수 공통, 권장)' : ''}
-${hasPlaceInfo ? '- 가게 기본 정보(가게명·주소·전화번호·영업시간)는 인트로 직후 방문 전 체크 섹션에 배치 (맨 아래 요약 박스 X, 본문 초반 필수)' : ''}
+- 인트로: 첫 200자 내 키워드 자연스럽게 등장${a && a.postsAnalyzed > 0 && a.introKwCount === a.postsAnalyzed ? ' (상위노출 글 전체 공통, 필수)' : a && a.introKwCount > 0 ? ' (상위노출 글 다수 공통, 권장)' : ''}${hasPlaceInfo ? '\n- 가게 기본 정보(가게명·주소·전화번호·영업시간)는 인트로 직후 방문 전 체크 섹션에 배치 (맨 아래 요약 박스 X, 본문 초반 필수)' : ''}
 - 키워드 '${kwForm}' ${a?.avgKwCount || 5}회 이상, 밀도 ${a?.avgKwDensity || 3}‰ 수준으로 자연스럽게 반복
 - 서브 키워드를 본문에 자연스럽게 포함
-- 연관 키워드 위에서 선별해 본문 전반에 분산 배치
 - 마크다운 헤더(##), HTML 태그 사용 금지
 - 참고사항에 오타가 있으면 자연스럽게 수정해서 반영
 ${notes ? `\n[내 정보 / 참고사항]\n${notes}` : ''}
@@ -566,15 +550,46 @@ ${hashtags || '관련 해시태그 5~7개'}
 위 분석 데이터를 반영해서 제목부터 해시태그까지 완성해줘.`
 }
 
+const MOCK_HOT_NICHES = [
+  { rank: 1, slug: 'wedding', name: '웨딩', icon: '💍', weekly_increase_pct: 320, hot_post_count: 47, headline: '스드메 거품 논란 폭발' },
+  { rank: 2, slug: 'finance', name: '재테크', icon: '📈', weekly_increase_pct: 180, hot_post_count: 32, headline: '30대 1억 모으기 vs 부동산 논쟁' },
+  { rank: 3, slug: 'diet', name: '다이어트', icon: '💪', weekly_increase_pct: 90, hot_post_count: 28, headline: 'GLP-1 비만약 한국 출시 이슈' },
+]
+
+const MOCK_WEDDING_HOT_POSTS = [
+  { source_label: '다이렉트결혼준비', title: '스드메 800에 했는데 친구는 1500... 거품인가요?', comments: 234, suggested_idea: '스드메 가격 거품의 진실' },
+  { source_label: '다이렉트결혼준비', title: '웨딩홀 vs 야외결혼식 비용 솔직 비교 후기', comments: 178, suggested_idea: '웨딩홀 vs 야외결혼 비용 완전 비교' },
+  { source_label: '다이렉트결혼준비', title: '식장 예약 6개월 전 vs 1년 전, 차이가 진짜 있나요?', comments: 156, suggested_idea: '결혼식장 예약 타이밍 완벽 가이드' },
+  { source_label: '맥마웨', title: '드레스샵 3곳 비교 후기 — 가격대별 솔직한 의견', comments: 143, suggested_idea: '웨딩드레스 가격대별 업체 비교 가이드' },
+  { source_label: '맥마웨', title: '작은결혼식 했다가 후회한 이유 5가지', comments: 129, suggested_idea: '작은결혼식 장단점 솔직 후기' },
+  { source_label: '네이버 뉴스', title: '2026년 평균 결혼 비용 8000만원 돌파...', comments: 98, suggested_idea: '결혼 비용 절약 꿀팁 10가지' },
+]
+
+const MOCK_WEDDING_PAIN_POINTS = [
+  { rank: 1, pain_point: '스드메 견적 비교 어려움', mention_count: 312, related_keywords: ['스드메 견적', '스드메 비교', '스드메 패키지'], suggested_idea: '스드메 견적표 양식 무료 배포', sample_quotes: ['견적표가 너무 복잡해서 비교가 안 돼요', '업체마다 포함 사항이 달라요'] },
+  { rank: 2, pain_point: '웨딩홀 계약 후 추가 비용 폭탄', mention_count: 267, related_keywords: ['웨딩홀 추가비용', '결혼식 비용 초과', '식장 계약'], suggested_idea: '웨딩홀 계약 시 꼭 확인해야 할 숨은 조항 5가지', sample_quotes: ['계약서에 없던 비용이 계속 나와요', '예산의 30%나 초과됐어요'] },
+  { rank: 3, pain_point: '신혼여행 일정 vs 예산 조율 갈등', mention_count: 198, related_keywords: ['신혼여행 예산', '신혼여행 추천', '신혼여행 일정'], suggested_idea: '신혼여행 예산별 최적 코스 추천', sample_quotes: ['남편이랑 의견이 안 맞아요', '예산은 한정적인데 가고 싶은 곳이 너무 많아요'] },
+  { rank: 4, pain_point: '청첩장 디자인·수량 결정 어려움', mention_count: 145, related_keywords: ['청첩장 디자인', '청첩장 수량', '청첩장 제작'], suggested_idea: '청첩장 수량 계산법 + 업체 비교 후기', sample_quotes: ['몇 장 만들어야 할지 모르겠어요', '종이 vs 모바일 청첩장 고민이에요'] },
+  { rank: 5, pain_point: '양가 부모님 의견 충돌', mention_count: 134, related_keywords: ['결혼 준비 갈등', '양가 의견 차이', '결혼식 규모'], suggested_idea: '양가 의견 충돌 없이 결혼 준비하는 방법', sample_quotes: ['양가 어머니가 서로 다른 걸 원하세요', '시댁에서 하객이 너무 많이 초대됐어요'] },
+]
+
+const NICHE_CONFIG: Record<string, { icon: LucideIcon; color: string }> = {
+  wedding: { icon: Gem, color: 'text-pink-400' },
+  finance: { icon: TrendingUp, color: 'text-blue-500' },
+  diet: { icon: Dumbbell, color: 'text-green-500' },
+}
+
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [isPro, setIsPro] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [mode, setMode] = useState<'write-input' | 'analyzing' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result' | 'feed-input' | 'feed-loading' | 'feed-result' | 'search-trend-category' | 'search-trend-loading' | 'search-trend-result'>('keyword-insight-input')
-  const [activeTab, setActiveTab] = useState<'keyword' | 'content' | 'prompt'>('keyword')
+  const [mode, setMode] = useState<'write-input' | 'analyzing' | 'pattern-preview' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'golden-guide' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result' | 'feed-input' | 'feed-analyze' | 'feed-loading' | 'feed-result' | 'search-trend-category' | 'search-trend-loading' | 'search-trend-result' | 'niche-home' | 'niche-detail'>('keyword-insight-input')
+  const [activeTab, setActiveTab] = useState<'keyword' | 'content' | 'prompt' | 'niche'>('keyword')
   const [activeSubTab, setActiveSubTab] = useState<'insight' | 'golden' | 'trend' | 'news' | 'search-trend'>('insight')
   const [promptSubTab, setPromptSubTab] = useState<'search' | 'feed'>('search')
   const [writeMode, setWriteMode] = useState<'search' | 'feed'>('search')
+  const [postType, setPostType] = useState<'review' | 'info' | 'simple' | ''>('')
 
   const [topic, setTopic] = useState('')
   const [brandName, setBrandName] = useState('')
@@ -595,6 +610,7 @@ export default function DashboardPage() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [hashtagCopied, setHashtagCopied] = useState(false)
+  const [proToast, setProToast] = useState(false)
 
   // keyword insight state
   const [insightKeyword, setInsightKeyword] = useState('')
@@ -609,7 +625,7 @@ export default function DashboardPage() {
   const [goldenError, setGoldenError] = useState('')
   const [goldenLoadingMore, setGoldenLoadingMore] = useState(false)
   const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null)
-  const [ideasMap, setIdeasMap] = useState<Record<string, KeywordIdea[] | 'loading' | 'error'>>({})
+  const [ideasMap, setIdeasMap] = useState<Record<string, KeywordIdea[] | 'loading' | 'error' | 'pro'>>({})
 
   const [autoSelectedKeyword, setAutoSelectedKeyword] = useState('')
 
@@ -632,7 +648,7 @@ export default function DashboardPage() {
   const [newsRankingItems, setNewsRankingItems] = useState<{ title: string; url: string }[]>([])
   const [newsRankingFetchedAt, setNewsRankingFetchedAt] = useState<string | null>(null)
   const [newsRankingError, setNewsRankingError] = useState('')
-  const [newsIdeasMap, setNewsIdeasMap] = useState<Record<string, ShortentsIdea[] | 'loading' | 'error'>>({})
+  const [newsIdeasMap, setNewsIdeasMap] = useState<Record<string, ShortentsIdea[] | 'loading' | 'error' | 'pro'>>({})
 
   // 노출형 프롬프트 state
   const [feedTopic, setFeedTopic] = useState('')
@@ -643,13 +659,25 @@ export default function DashboardPage() {
   const [feedError, setFeedError] = useState('')
   const [feedCopied, setFeedCopied] = useState(false)
   const [feedOrigin, setFeedOrigin] = useState<'news' | 'tab'>('tab')
+  const [feedAnalysis, setFeedAnalysis] = useState<any>(null)
+  const [feedAnalysisLoading, setFeedAnalysisLoading] = useState(false)
+  const [feedTitleDir, setFeedTitleDir] = useState('감성형')
+  const [feedStyle, setFeedStyle] = useState('스토리텔링')
   const [newsExpandedItem, setNewsExpandedItem] = useState<string | null>(null)
+
+  const [nicheDetailSlug, setNicheDetailSlug] = useState<string | null>(null)
+  const [nicheDetailTab, setNicheDetailTab] = useState<'hot-posts' | 'pain-points'>('hot-posts')
+
+  const [guideKeyword, setGuideKeyword] = useState('')
+  const [guideIdeas, setGuideIdeas] = useState<KeywordIdea[] | 'loading' | null>(null)
+  const [guideTitles, setGuideTitles] = useState<string[] | 'loading' | null>(null)
 
   // supplement-input state
   const [commonSections, setCommonSections] = useState<{ topic: string; note: string }[]>([])
   const [sectionsLoading, setSectionsLoading] = useState(false)
   const [supplementMap, setSupplementMap] = useState<Record<string, string>>({})
   const [savedKeyword, setSavedKeyword] = useState('')
+  const [savedKeywords, setSavedKeywords] = useState<string[]>([])
   const [savedSubKws, setSavedSubKws] = useState('')
 
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -660,9 +688,15 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMounted(true)
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) router.replace('/login')
-      else setUser(user)
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) { router.replace('/login'); return }
+      setUser(user)
+      const { data: planData } = await supabase
+        .from('user_plans')
+        .select('plan')
+        .eq('user_id', user.id)
+        .single()
+      setIsPro(planData?.plan === 'pro' || planData?.plan === 'biz')
       setLoading(false)
     })
   }, [])
@@ -678,7 +712,7 @@ export default function DashboardPage() {
   }, [])
 
   const resetAll = () => {
-    setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
+    setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink(''); setPostType('')
     setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setAutoSelectedKeyword('')
     setError(''); setPlaceError('')
     setCopied(false); setHashtagCopied(false)
@@ -688,7 +722,9 @@ export default function DashboardPage() {
     setIssueTitles([]); setIssueError(''); setIssueExpandedTopic(null); setIssueIdeasMap({})
     setSearchTrendCategory(''); setSearchTrendKeywords([]); setSearchTrendError('')
     setNewsRankingItems([]); setNewsRankingFetchedAt(null); setNewsRankingError(''); setNewsIdeasMap({}); setNewsExpandedItem(null)
-    setCommonSections([]); setSectionsLoading(false); setSupplementMap({}); setSavedKeyword(''); setSavedSubKws('')
+    setCommonSections([]); setSectionsLoading(false); setSupplementMap({}); setSavedKeyword(''); setSavedKeywords([]); setSavedSubKws('')
+    setNicheDetailSlug(null)
+    setNicheDetailTab('hot-posts')
     setActiveTab('keyword')
     setActiveSubTab('insight')
     setMode('keyword-insight-input')
@@ -700,12 +736,36 @@ export default function DashboardPage() {
     return words.some(w => notes.includes(w))
   }
 
-  const proceedToPrompt = () => {
+  const proceedToPrompt = async () => {
     const supplementEntries = Object.entries(supplementMap).filter(([, v]) => v.trim())
     const supplementText = supplementEntries.map(([t, v]) => `${t}: ${v}`).join('\n')
     const finalNotes = notes && supplementText ? `${notes}\n${supplementText}` : notes || supplementText
-    setPrompt(buildPrompt(savedKeyword, savedSubKws, topic, finalNotes, keywordData, crawlData, analysis))
+
     setMode('result')
+    window.scrollTo({ top: 0 })
+    setPrompt('')
+
+    try {
+      const res = await fetch('/api/build-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword: savedKeyword,
+          subKeywords: savedSubKws,
+          topic,
+          notes: finalNotes,
+          keywordData,
+          crawlData,
+          analysis,
+          postType,
+        }),
+      })
+      const data = await res.json()
+      setPrompt(data.prompt || '')
+      setIsPro(data.isPro ?? isPro)
+    } catch {
+      setPrompt(buildPrompt(savedKeyword, savedSubKws, topic, finalNotes, keywordData, crawlData, analysis, postType))
+    }
   }
 
   const fetchGoldenKeywords = async (category: string, offset: number, append = false) => {
@@ -719,6 +779,31 @@ export default function DashboardPage() {
     } catch {
       setGoldenError('서버에 연결할 수 없습니다.')
     }
+  }
+
+  const startGoldenGuide = (keyword: string) => {
+    setGuideKeyword(keyword)
+    setGuideIdeas('loading')
+    setGuideTitles('loading')
+    setMode('golden-guide')
+
+    if (isPro) {
+      fetch('/api/keyword-ideas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword, category: goldenCategory }),
+      })
+        .then(r => r.json())
+        .then(data => setGuideIdeas(data.ideas || []))
+        .catch(() => setGuideIdeas([]))
+    } else {
+      setGuideIdeas([])
+    }
+
+    fetch(`http://localhost:3001/top-titles?keyword=${encodeURIComponent(keyword)}`)
+      .then(r => r.json())
+      .then((data: { titles?: { title: string }[] }) => setGuideTitles((data.titles || []).slice(0, 5).map(t => t.title)))
+      .catch(() => setGuideTitles([]))
   }
 
   const startGolden = async (category: string) => {
@@ -744,6 +829,7 @@ export default function DashboardPage() {
     setExpandedKeyword(keyword)
     if (ideasMap[keyword]) return
 
+    if (!isPro) { setIdeasMap(prev => ({ ...prev, [keyword]: 'pro' })); return }
     setIdeasMap(prev => ({ ...prev, [keyword]: 'loading' }))
     try {
       const res = await fetch('/api/keyword-ideas', {
@@ -826,6 +912,7 @@ export default function DashboardPage() {
     setIssueExpandedTopic(topic)
     if (issueIdeasMap[topic]) return
 
+    if (!isPro) { setIssueIdeasMap(prev => ({ ...prev, [topic]: 'pro' })); return }
     setIssueIdeasMap(prev => ({ ...prev, [topic]: 'loading' }))
     try {
       const res = await fetch('/api/shortents-ideas', {
@@ -862,7 +949,7 @@ export default function DashboardPage() {
     setMode('news-result')
   }
 
-  const switchTab = (tab: 'keyword' | 'content' | 'prompt') => {
+  const switchTab = (tab: 'keyword' | 'content' | 'prompt' | 'niche') => {
     setActiveTab(tab)
     if (tab === 'keyword') {
       setActiveSubTab('insight')
@@ -873,12 +960,16 @@ export default function DashboardPage() {
       setTrendCategory(''); setTrendError('')
       setIssueTitles([]); setIssueError(''); setIssueExpandedTopic(null); setIssueIdeasMap({})
       setMode('trend-category')
+    } else if (tab === 'niche') {
+      setNicheDetailSlug(null)
+      setNicheDetailTab('hot-posts')
+      setMode('niche-home')
     } else {
       setPromptSubTab('search')
       setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
       setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setAutoSelectedKeyword('')
       setError(''); setPlaceError('')
-      setCommonSections([]); setSectionsLoading(false); setSupplementMap({}); setSavedKeyword(''); setSavedSubKws('')
+      setCommonSections([]); setSectionsLoading(false); setSupplementMap({}); setSavedKeyword(''); setSavedKeywords([]); setSavedSubKws('')
       setMode('write-input')
     }
   }
@@ -903,22 +994,68 @@ export default function DashboardPage() {
     setFeedSnippetLoading(false)
   }
 
-  const generateFeedPrompt = async () => {
+  const analyzeFeedTopic = async () => {
     if (!feedTopic.trim()) return
+    setFeedAnalysis(null)
+    setFeedTitleDir('')
+    setFeedStyle('')
+    setFeedAnalysisLoading(true)
+    setMode('feed-analyze')
+    try {
+      const res = await fetch('/api/feed-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: feedTopic }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setFeedAnalysis(data)
+        // 뉴스 헤드라인 키워드 기반 추천
+        const headlineText = (data.newsHeadlines || []).map((h: any) => h.title).join(' ')
+        const controversyWords = ['논란', '폭로', '경고', '사태', '위기', '충격', '의혹', '갈등', '비판', '규탄', '반발', '거부', '파문', '고발', '폭탄']
+        const infoWords = ['방법', '이유', '분석', '전망', '가이드', '정보', '팁', '비교', '정리', '완벽', '총정리']
+        const reviewWords = ['후기', '리뷰', '솔직', '경험', '다녀왔']
+        const hasControversy = controversyWords.some(w => headlineText.includes(w))
+        const hasInfo = infoWords.some(w => headlineText.includes(w))
+        const hasReview = reviewWords.some(w => headlineText.includes(w))
+        if (hasControversy) {
+          setFeedTitleDir('궁금증형'); setFeedStyle('솔직한 의견')
+        } else if (hasReview) {
+          setFeedTitleDir('감성형'); setFeedStyle('스토리텔링')
+        } else if (hasInfo) {
+          setFeedTitleDir('공감형'); setFeedStyle('정보+공감')
+        } else {
+          setFeedTitleDir('감성형'); setFeedStyle('스토리텔링')
+        }
+      }
+    } catch {}
+    setFeedAnalysisLoading(false)
+  }
+
+  const generateFeedPrompt = async () => {
     setMode('feed-loading')
     setFeedError('')
     try {
       const res = await fetch('/api/feed-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: feedTopic, snippet: feedSnippet, notes: feedNotes }),
+        body: JSON.stringify({
+          topic: feedTopic,
+          snippet: feedSnippet,
+          notes: feedNotes,
+          titleDir: feedTitleDir,
+          style: feedStyle,
+          hashtags: feedAnalysis?.hashtags || [],
+          genderRatio: feedAnalysis?.genderRatio || null,
+          ageRatio: feedAnalysis?.ageRatio || null,
+        }),
       })
       const data = await res.json()
-      if (!res.ok) { setFeedError(data.error || '오류가 발생했습니다'); setMode('feed-input') }
+      if (!res.ok) { setFeedError(data.error || '오류가 발생했습니다'); setMode('feed-analyze') }
       else { setFeedPrompt(data.prompt); setMode('feed-result') }
     } catch {
       setFeedError('오류가 발생했습니다')
-      setMode('feed-input')
+      setMode('feed-analyze')
     }
   }
 
@@ -928,7 +1065,7 @@ export default function DashboardPage() {
     setTopic(title); setBrandName(''); setKeywords(kws.slice(0, 3)); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
     setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setAutoSelectedKeyword('')
     setError(''); setPlaceError('')
-    setCommonSections([]); setSectionsLoading(false); setSupplementMap({}); setSavedKeyword(''); setSavedSubKws('')
+    setCommonSections([]); setSectionsLoading(false); setSupplementMap({}); setSavedKeyword(''); setSavedKeywords([]); setSavedSubKws('')
     setMode('write-input')
   }
 
@@ -957,6 +1094,7 @@ export default function DashboardPage() {
     setNewsExpandedItem(item)
     if (newsIdeasMap[item]) return
 
+    if (!isPro) { setNewsIdeasMap(prev => ({ ...prev, [item]: 'pro' })); return }
     setNewsIdeasMap(prev => ({ ...prev, [item]: 'loading' }))
     try {
       const res = await fetch('/api/news-idea', {
@@ -1065,15 +1203,18 @@ export default function DashboardPage() {
       setCrawlData(cd)
       setAnalysis(a)
       setSavedKeyword(selectedKw)
+      setSavedKeywords(allKws)
       setSavedSubKws(allSubKws)
       setCommonSections([])
       setSupplementMap({})
       setSectionsLoading(true)
-      setMode('supplement-input')
+      setMode('pattern-preview')
+      window.scrollTo({ top: 0 })
 
-      // 비동기로 공통 섹션 분석 (화면 전환 후 백그라운드)
+      // 비동기로 공통 섹션 분석 (pro 전용, 화면 전환 후 백그라운드)
       ;(async () => {
         try {
+          if (!isPro) return
           const postsForAnalysis = (cd.posts || []).slice(0, 3).map((p: CrawlPost) => ({
             title: p.title,
             fullText: (p.fullText || '').slice(0, 1500)
@@ -1141,6 +1282,14 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* Pro 전용 토스트 */}
+      {proToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-lg flex items-center gap-3 whitespace-nowrap">
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+          <span>Pro 전용 기능이에요.</span>
+          <button onClick={() => window.open('/pricing', '_blank')} className="text-blue-400 font-semibold hover:text-blue-300">업그레이드 →</button>
+        </div>
+      )}
       {/* 트렌드 배지 툴팁 */}
       {trendBadgeTooltipPos && (
         <div
@@ -1181,6 +1330,17 @@ export default function DashboardPage() {
               {tab === 'keyword' ? '키워드' : tab === 'content' ? '글감' : '프롬프트'}
             </button>
           ))}
+          <button
+            onClick={() => switchTab('niche')}
+            className={`py-4 text-sm transition-all flex items-center gap-1 ${
+              activeTab === 'niche'
+                ? 'font-bold text-red-500'
+                : 'font-medium text-gray-500 hover:font-bold hover:text-red-500'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5 text-red-500" />틈새
+            <span className="self-start -mt-1 -ml-1 text-[7px] font-extrabold text-red-500 leading-none">HOT</span>
+          </button>
         </div>
         <div className="flex-1 flex items-center justify-end">
           <div className="relative" ref={dropdownRef}>
@@ -1206,6 +1366,18 @@ export default function DashboardPage() {
                 >
                   마이페이지
                 </a>
+                {user?.email === 'damdamss@naver.com' && (
+                  <>
+                    <div className="h-px bg-gray-100" />
+                    <a
+                      href="/admin"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      관리자페이지
+                    </a>
+                  </>
+                )}
                 <div className="h-px bg-gray-100" />
                 <button
                   onClick={async () => { setDropdownOpen(false); await supabase.auth.signOut(); router.push('/') }}
@@ -1257,7 +1429,7 @@ export default function DashboardPage() {
             {feedOrigin === 'news' && (
               <button onClick={() => { setActiveTab('content'); setActiveSubTab('news'); setMode('news-result') }} className="text-gray-400 text-sm hover:text-gray-600 mb-4 block">← 뒤로</button>
             )}
-            <h2 className="text-xl font-bold mb-2 pl-2">노출형 프롬프트 생성</h2>
+            <h2 className="text-xl font-bold mb-2 pl-2">홈피드 노출형 프롬프트 생성</h2>
             <p className="text-gray-400 text-sm mb-6 pl-2">홈피드 알고리즘에 최적화된 글쓰기 프롬프트를 만들어드려요</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
               <div>
@@ -1265,29 +1437,238 @@ export default function DashboardPage() {
                 <input type="text" placeholder="예: 스타벅스 충전금 환불 논란" value={feedTopic} onChange={e => setFeedTopic(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">뉴스 내용 요약 <span className="text-gray-400 font-normal">(자동입력 · 수정 가능)</span></label>
-                {feedSnippetLoading ? (
-                  <div className="w-full h-20 bg-gray-100 rounded-xl animate-pulse" />
-                ) : (
-                  <textarea value={feedSnippet} onChange={e => setFeedSnippet(e.target.value)} rows={3}
-                    placeholder="뉴스 내용 요약이 자동으로 입력돼요. 직접 수정하거나 추가할 수 있어요."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300" />
-                )}
-              </div>
+              {feedOrigin === 'news' && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">뉴스 내용 요약 <span className="text-gray-400 font-normal">(자동입력 · 수정 가능)</span></label>
+                  {feedSnippetLoading ? (
+                    <div className="w-full h-20 bg-gray-100 rounded-xl animate-pulse" />
+                  ) : (
+                    <textarea value={feedSnippet} onChange={e => setFeedSnippet(e.target.value)} rows={3}
+                      placeholder="뉴스 내용 요약이 자동으로 입력돼요. 직접 수정하거나 추가할 수 있어요."
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300" />
+                  )}
+                </div>
+              )}
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">다루고 싶은 내용 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <textarea value={feedNotes} onChange={e => setFeedNotes(e.target.value)} rows={6}
-                  placeholder={`예)\n이 주제에 대한 나의 직접 경험\n가장 강조하고 싶은 포인트\n독자에게 전하고 싶은 메시지\n이 글을 쓰게 된 계기`}
+                  placeholder={`예:\n이 주제에 대한 나의 직접 경험\n가장 강조하고 싶은 포인트\n독자에게 전하고 싶은 메시지\n이 글을 쓰게 된 계기`}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300" />
                 <p className="text-xs text-gray-400 mt-1">내 시각·경험·의견을 적으면 더 개성 있는 프롬프트가 만들어져요</p>
               </div>
-              {feedError && <p className="text-sm text-red-400">{feedError}</p>}
-              <button onClick={generateFeedPrompt} disabled={!feedTopic.trim()}
+              <button onClick={analyzeFeedTopic} disabled={!feedTopic.trim()}
                 className="w-full py-3 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                프롬프트 생성
+                다음
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ── feed-analyze ── */}
+        {mode === 'feed-analyze' && (
+          <div className="space-y-4">
+            <button onClick={() => setMode('feed-input')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            <div className="pl-2">
+              <h2 className="text-xl font-bold">홈피드 분석</h2>
+              <p className="text-sm text-gray-400 mt-1">주제: <span className="text-gray-700 font-medium">{feedTopic}</span></p>
+            </div>
+
+            {feedAnalysisLoading ? (
+              <div className="space-y-4 animate-pulse">
+                {[80, 60, 100, 80].map((h, i) => (
+                  <div key={i} className="bg-white rounded-2xl shadow-sm" style={{ height: h }} />
+                ))}
+              </div>
+            ) : (
+              <>
+                {/* 블로그 글 현황 */}
+                {feedAnalysis?.blogCount != null && (
+                  <div className="bg-white rounded-2xl p-5 shadow-sm">
+                    <p className="text-xs font-semibold text-gray-800 mb-5 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> 콘텐츠 포화도</p>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1 bg-gray-50 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-bold text-blue-500">{feedAnalysis.blogCount.toLocaleString()}</p>
+                        <p className="text-xs text-gray-400 mt-1">블로그 글 수</p>
+                        <p className="text-xs text-transparent mt-0.5">-</p>
+                      </div>
+                      {feedAnalysis.searchVolume?.total > 0 && (
+                        <div className="flex-1 bg-gray-50 rounded-xl p-4 text-center">
+                          <p className="text-2xl font-bold text-purple-500">{feedAnalysis.searchVolume.total.toLocaleString()}</p>
+                          <p className="text-xs text-gray-400 mt-1">월간 검색량</p>
+                          <p className="text-xs text-gray-300 mt-0.5">PC {feedAnalysis.searchVolume.pc.toLocaleString()} · 모바일 {feedAnalysis.searchVolume.mobile.toLocaleString()}</p>
+                        </div>
+                      )}
+                    </div>
+                    {(() => {
+                      const bc = feedAnalysis.blogCount
+                      const sv = feedAnalysis.searchVolume?.total || 0
+                      const ratio = sv > 0 ? bc / sv : null
+                      const dot = ratio === null
+                        ? 'bg-gray-300'
+                        : ratio < 3 ? 'bg-green-400'
+                        : ratio < 8 ? 'bg-yellow-400'
+                        : ratio < 15 ? 'bg-orange-400'
+                        : 'bg-red-400'
+                      const msg = bc > 500000
+                        ? '경쟁이 치열한 주제예요. 차별화된 시각이 필요해요.'
+                        : bc > 100000
+                        ? '적당한 경쟁 수준이에요. 좋은 콘텐츠면 노출 가능해요.'
+                        : '경쟁이 낮아 홈피드 노출 가능성이 높아요.'
+                      return (
+                        <p className="text-sm font-medium text-gray-700 text-center mt-4 flex items-center justify-center gap-1.5">
+                          <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
+                          {msg}
+                        </p>
+                      )
+                    })()}
+                  </div>
+                )}
+
+                {/* 최신 뉴스 헤드라인 */}
+                {feedAnalysis?.newsHeadlines?.length > 0 && (
+                  <div className="bg-white rounded-2xl p-5 shadow-sm">
+                    <p className="text-xs font-semibold text-gray-800 mb-5 flex items-center gap-1.5"><Newspaper className="w-3.5 h-3.5" /> 지금 이 주제 뉴스</p>
+                    <ul className="space-y-4">
+                      {feedAnalysis.newsHeadlines.map((item: { title: string; link: string; pubDate: string }, i: number) => (
+                        <li key={i}>
+                          <a href={item.link} target="_blank" rel="noopener noreferrer"
+                            className="flex items-start gap-2 group">
+                            <span className="shrink-0 text-xs text-gray-300 mt-0.5 font-medium w-4">{i + 1}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-700 group-hover:text-blue-500 leading-snug transition-colors line-clamp-2">{item.title}</p>
+                              {item.pubDate && <p className="text-xs text-gray-400 mt-0.5">{item.pubDate}</p>}
+                            </div>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-4 flex flex-col items-center">
+                      <ChevronRight className="w-4 h-4 text-gray-300 my-1 rotate-90" />
+                      <p className="text-xs text-gray-500 mb-2 text-center">다루고 싶은 내용</p>
+                      <textarea
+                        value={feedNotes}
+                        onChange={e => setFeedNotes(e.target.value)}
+                        rows={3}
+                        className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300"
+                        placeholder="뉴스를 보고 다루고 싶은 내용을 적어주세요"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 타겟 독자 */}
+                {feedAnalysis?.genderRatio && (feedAnalysis.genderRatio.male > 0 || feedAnalysis.genderRatio.female > 0) && (
+                  <div className="bg-white rounded-2xl p-5 shadow-sm space-y-5">
+                    <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5" /> 이 주제를 찾는 사람</p>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-4">성별 분포</p>
+                      <div className="flex h-10 rounded-xl overflow-hidden">
+                        <div className="flex items-center justify-center bg-pink-400 text-white text-xs font-bold gap-1"
+                          style={{ width: `${feedAnalysis.genderRatio.female}%` }}>
+                          여성 {feedAnalysis.genderRatio.female}%
+                        </div>
+                        <div className="flex items-center justify-center bg-blue-400 text-white text-xs font-bold gap-1"
+                          style={{ width: `${feedAnalysis.genderRatio.male}%` }}>
+                          남성 {feedAnalysis.genderRatio.male}%
+                        </div>
+                      </div>
+                    </div>
+                    {feedAnalysis?.ageRatio && (feedAnalysis.ageRatio.twenty > 0 || feedAnalysis.ageRatio.thirty > 0 || feedAnalysis.ageRatio.forty > 0) && (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-4">연령 분포</p>
+                        <div className="space-y-2.5">
+                          {[
+                            { label: '10대', value: feedAnalysis.ageRatio.teen },
+                            { label: '20대', value: feedAnalysis.ageRatio.twenty },
+                            { label: '30대', value: feedAnalysis.ageRatio.thirty },
+                            { label: '40대', value: feedAnalysis.ageRatio.forty },
+                            { label: '50대+', value: feedAnalysis.ageRatio.fifty },
+                          ].map((item) => (
+                            <div key={item.label} className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 w-9 shrink-0">{item.label}</span>
+                              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-400 rounded-full transition-all" style={{ width: `${item.value}%` }} />
+                              </div>
+                              <span className="text-xs font-bold text-blue-500 w-7 text-right">{item.value}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 제목 방향 선택 */}
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <p className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> 제목 스타일</p>
+                  <p className="text-xs text-gray-400 mb-5">추천값이 선택돼 있어요. 변경할 수 있어요.</p>
+                  <div className="flex gap-2">
+                    {[
+                      { key: '감성형', desc: '감정을 자극하는 따뜻하고 공감되는 제목' },
+                      { key: '궁금증형', desc: '클릭하지 않으면 궁금한 정보를 숨기는 제목' },
+                      { key: '공감형', desc: '내 이야기인 것 같은 느낌을 주는 제목' },
+                    ].map(({ key, desc }) => (
+                      <button key={key} onClick={() => setFeedTitleDir(key)}
+                        className={`flex-1 py-2.5 px-2 rounded-xl text-sm font-medium transition-all group relative ${feedTitleDir === key ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {feedTitleDir === key && (
+                          <span className="absolute top-1.5 right-1.5 text-[10px] font-bold bg-white text-blue-500 px-1.5 py-0.5 rounded-full shadow-sm border border-blue-100">추천</span>
+                        )}
+                        <span className="block">{key}</span>
+                        <span className={`block text-xs font-normal mt-1 leading-snug ${feedTitleDir === key ? 'text-blue-100' : 'text-gray-400 opacity-0 group-hover:opacity-100'} transition-opacity`}>
+                          {desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 글 스타일 선택 */}
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <p className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><PenLine className="w-3.5 h-3.5" /> 글 스타일</p>
+                  <p className="text-xs text-gray-400 mb-5">추천값이 선택돼 있어요. 변경할 수 있어요.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: '스토리텔링', desc: '경험을 이야기로 풀어내는 방식' },
+                      { key: '정보+공감', desc: '유용한 정보에 내 생각을 더하는 방식' },
+                      { key: '솔직한 의견', desc: '직접적이고 솔직한 내 시각 중심' },
+                      { key: '유머+경험', desc: '가볍고 재밌게 경험을 전달하는 방식' },
+                    ].map(({ key, desc }) => (
+                      <button key={key} onClick={() => setFeedStyle(key)}
+                        className={`p-3 rounded-xl text-left transition-all group relative ${feedStyle === key ? 'bg-blue-50 border-2 border-blue-400' : 'bg-gray-50 border-2 border-transparent hover:border-gray-200'}`}>
+                        {feedStyle === key && (
+                          <span className="absolute top-1.5 right-1.5 text-[10px] font-bold bg-white text-blue-500 px-1.5 py-0.5 rounded-full shadow-sm border border-blue-100">추천</span>
+                        )}
+                        <p className={`text-sm font-semibold mb-0.5 ${feedStyle === key ? 'text-blue-600' : 'text-gray-700'}`}>{key}</p>
+                        <p className={`text-xs leading-snug ${feedStyle === key ? 'text-blue-400' : 'text-gray-400 opacity-0 group-hover:opacity-100'} transition-opacity`}>{desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 추천 해시태그 */}
+                {feedAnalysis?.hashtags?.length > 0 && (
+                  <div className="bg-white rounded-2xl p-5 shadow-sm">
+                    <p className="text-xs font-semibold text-gray-800 mb-5 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> 추천 해시태그</p>
+                    <div className="flex flex-wrap gap-2">
+                      {feedAnalysis.hashtags.map((tag: string, i: number) => (
+                        <span key={i} className={`text-xs px-3 py-1 rounded-full font-medium ${i < 3 ? 'bg-purple-500 text-white' : i < 7 ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {feedError && <p className="text-sm text-red-400 pl-1">{feedError}</p>}
+
+                <div className="sticky bottom-4 z-10">
+                  <button onClick={generateFeedPrompt}
+                    className="w-full py-3 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 shadow-lg transition-colors">
+                    <span className="flex items-center justify-center gap-1">프롬프트 생성 <ChevronRight className="w-4 h-4" /></span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1308,7 +1689,7 @@ export default function DashboardPage() {
         {/* ── feed-result ── */}
         {mode === 'feed-result' && feedPrompt && (
           <div className="space-y-4">
-            <button onClick={() => setMode('feed-input')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            <button onClick={() => setMode('feed-analyze')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
             <h2 className="text-xl font-bold pl-2">노출형 프롬프트</h2>
             <p className="text-gray-400 text-sm -mt-2 pl-2">아래 프롬프트를 복사해서 Claude나 ChatGPT에 붙여넣으세요</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm relative">
@@ -1329,10 +1710,28 @@ export default function DashboardPage() {
             <p className="text-gray-400 text-sm mb-6 pl-2">키워드를 입력하면 상위노출 패턴을 분석하고 프롬프트를 만들어드려요</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
               <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">글 유형</label>
+                <div className="flex gap-2">
+                  {([['review', '후기·리뷰'], ['info', '정보·가이드'], ['simple', '일상·기록']] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setPostType(prev => prev === val ? '' : val)}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                        postType === val
+                          ? 'bg-blue-500 text-white border-blue-500'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">작성 주제 <span className="text-red-400">*</span></label>
                 <input type="text" placeholder="예: 문래 라멘 로라멘 후기" value={topic} onChange={e => setTopic(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 mt-1">작성하고 싶은 포스팅 주제를 입력하세요</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">가게·브랜드명 <span className="text-gray-400 font-normal">(선택)</span></label>
@@ -1342,7 +1741,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-gray-400 mt-1">입력하면 내 가게·브랜드에 딱 맞는 분석 결과가 나와요</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">타겟 키워드 <span className="text-red-400">*</span></label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">타겟 키워드 <span className="text-red-400">*</span> <span className="text-gray-400 font-normal">(최대 3개)</span></label>
                 <div className="w-full px-3 py-2 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus-within:border-blue-500 flex flex-wrap gap-2 min-h-[46px] cursor-text"
                   onClick={() => document.getElementById('keyword-input')?.focus()}>
                   {keywords.map((kw, i) => (
@@ -1383,31 +1782,10 @@ export default function DashboardPage() {
                 </div>
                 <p className="text-xs text-gray-400 mt-1">함께 노출되길 원하는 키워드를 쉼표(,)로 구분해서 입력하세요</p>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">참고사항 <span className="text-gray-400 font-normal">(선택)</span></label>
-                <textarea placeholder={`예:\n주차가 협소해서 대중교통 이용 추천\n웨이팅이 있지만 회전율이 빨라서 금방 입장 가능\n떡볶이보다 튀김이 더 맛있었음\n혼밥하기 좋은 1인석 있음`}
-                  value={notes} onChange={e => setNotes(e.target.value)} rows={5}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 -mt-0.5">포스팅에 담고 싶은 내용이나 경험을 자유롭게 적어주세요</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">참고 링크 <span className="text-gray-400 font-normal">(선택)</span></label>
-                <div className="flex gap-2">
-                  <input type="text" placeholder="예: https://map.naver.com/p/... (네이버 플레이스 URL)"
-                    value={referenceLink} onChange={e => { setReferenceLink(e.target.value); setPlaceError('') }}
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
-                  <button type="button" onClick={extractPlace} disabled={!referenceLink.trim() || placeLoading}
-                    className="px-4 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 disabled:opacity-40 whitespace-nowrap">
-                    {placeLoading ? '추출 중...' : '가게정보 불러오기'}
-                  </button>
-                </div>
-                {placeError && <p className="text-xs text-red-400 mt-1">{placeError}</p>}
-                {!placeError && <p className="text-xs text-gray-400 mt-1">네이버 지도 URL을 붙여넣고 버튼을 누르면 잠시 후 위 참고사항이 자동으로 채워져요</p>}
-              </div>
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <button onClick={startAnalysis} disabled={!mainKeyword}
                 className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                {!mainKeyword ? '필수 항목을 모두 입력해야 분석을 시작할 수 있어요' : '상위노출 분석 시작 →'}
+                {!mainKeyword ? '필수 항목을 모두 입력해야 분석을 시작할 수 있어요' : <span className="flex items-center justify-center gap-1">상위노출 분석 시작 <ChevronRight className="w-4 h-4" /></span>}
               </button>
             </div>
           </div>
@@ -1424,7 +1802,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <h2 className="text-xl font-bold mb-2">분석 중이에요</h2>
-            <p className="text-gray-500 text-sm mb-1">상위 노출 알고리즘을 분석하고 있어요</p>
+            <p className="text-gray-500 text-sm mb-1">상위 노출 패턴을 분석하고 있어요</p>
             <div className="flex justify-center gap-1.5 mt-4">
               <div className="w-2 h-2 bg-blue-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
               <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
@@ -1433,104 +1811,23 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── supplement-input ── */}
-        {mode === 'supplement-input' && (
+        {/* ── pattern-preview ── */}
+        {mode === 'pattern-preview' && analysis && (
           <div className="space-y-4">
             <button onClick={() => setMode('write-input')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold pl-2">상위노출 최적화 체크리스트</h2>
-            <p className="text-gray-600 text-sm -mt-2 pl-2">
-              상위노출을 위해 꼭 담아야 할 항목들이에요. <span className="text-blue-500">체크되지 않은 항목에 내용을 입력하면</span> 자동으로 체크돼요. <span className="inline-block bg-blue-100 text-blue-500 text-xs px-2 py-0.5 rounded-full font-medium">선택사항</span>이지만 많이 채울수록 상위 노출 확률이 올라가요.
-            </p>
-
-            {sectionsLoading ? (
-              <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="relative w-12 h-12">
-                    <div className="absolute inset-0 rounded-full border-4 border-purple-100"></div>
-                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-purple-400 animate-spin"></div>
-                    <div className="absolute inset-0 flex items-center justify-center text-lg">✨</div>
-                  </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold pl-2 mb-3">상위노출 패턴 분석</h2>
+              <p className="text-gray-600 text-sm pl-2">키워드: {savedKeywords.length > 0 ? savedKeywords.join(', ') : savedKeyword}</p>
+              {autoSelectedKeyword && (
+                <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm text-blue-700">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-500 border-2 border-blue-500 mr-2 align-middle">
+                    <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span><strong>'{autoSelectedKeyword}'</strong>을 타겟 키워드로 선정했어요 <span className="ml-1 text-xs bg-blue-500 text-white px-2.5 py-1 rounded-full font-medium">🏆 상위노출 최적 키워드</span>
                 </div>
-                <p className="text-sm text-gray-500 font-medium">상위 노출 글 공통 패턴 분석 중...</p>
-                <p className="text-xs text-gray-400 mt-1">분석하고 있어요.</p>
-              </div>
-            ) : commonSections.length === 0 ? (
-              <div className="bg-white rounded-2xl p-5 shadow-sm text-center text-gray-400 text-sm">
-                공통 섹션 분석 결과가 없어요. 그냥 프롬프트를 생성해주세요.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {commonSections.map(section => {
-                  const coveredByNotes = isCoveredInNotes(section.topic)
-                  const covered = coveredByNotes || !!(supplementMap[section.topic]?.trim())
-                  return (
-                    <div key={section.topic} className={`rounded-2xl p-5 shadow-sm ${covered ? 'bg-white opacity-70' : 'bg-blue-50'}`}>
-                      <div className="flex items-start gap-3">
-                        <div className={`w-5 h-5 rounded shrink-0 mt-0.5 border-2 flex items-center justify-center ${covered ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'}`}>
-                          {covered && (
-                            <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
-                              <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <p className={`font-semibold text-sm ${covered ? 'text-gray-400 italic' : 'text-gray-800'}`}>
-                            {section.topic}
-                            {!covered && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full font-medium">추가필요</span>}
-                            {covered && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-medium">작성완료</span>}
-                          </p>
-                          <p className={`text-xs text-gray-500 mt-0.5 leading-relaxed ${covered ? 'italic' : ''}`}><span className="text-gray-600 font-medium">예:</span> {section.note}</p>
-                          {!coveredByNotes && (
-                            <textarea
-                              value={supplementMap[section.topic] || ''}
-                              onChange={e => setSupplementMap(prev => ({ ...prev, [section.topic]: e.target.value }))}
-                              placeholder="이 항목에 대해 작성할 내용을 입력하세요."
-                              rows={2}
-                              className="mt-3 w-full px-4 py-2 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300 bg-white"
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            <div className="flex flex-col gap-2 pt-1">
-              <button
-                onClick={proceedToPrompt}
-                className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600"
-              >
-                {Object.values(supplementMap).some(v => v.trim()) ? '추가하고 프롬프트 생성 →' : '프롬프트 생성 →'}
-              </button>
-              {!sectionsLoading && Object.values(supplementMap).some(v => v.trim()) && (
-                <button
-                  onClick={() => { setSupplementMap({}); proceedToPrompt() }}
-                  className="w-full text-gray-400 text-sm py-2 hover:text-gray-600"
-                >
-                  입력 내용 없이 건너뛰기
-                </button>
               )}
             </div>
-          </div>
-        )}
-
-        {/* ── result ── */}
-        {mode === 'result' && analysis && (
-          <div className="space-y-4">
-            <button onClick={() => { setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink(''); setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setMode('write-input') }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
-            <h2 className="text-xl font-bold pl-2">분석 결과</h2>
-            <p className="text-gray-400 text-sm -mt-2 pl-2">키워드: <span className="text-blue-500 font-medium">{keywordData?.keyword || mainKeyword}</span></p>
-            {autoSelectedKeyword && (
-              <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm text-blue-700">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-500 border-2 border-blue-500 mr-2 align-middle">
-                  <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span><strong>'{autoSelectedKeyword}'</strong>을 타겟 키워드로 선정했어요 <span className="ml-1 text-xs bg-blue-500 text-white px-2.5 py-1 rounded-full font-medium">🏆 상위노출 최적 키워드</span>
-              </div>
-            )}
 
             {/* 키워드 통계 */}
             {keywordData && (
@@ -1547,13 +1844,16 @@ export default function DashboardPage() {
                   </div>
                   <div className="bg-gray-50 rounded-xl p-3 text-center">
                     <p className="text-xs text-gray-500 mb-1">등급</p>
-                    <p className="text-sm font-bold">{keywordData.grade}</p>
+                    <p className="text-sm font-bold flex items-center justify-center gap-1">
+                      <Circle className={`w-3 h-3 ${gradeCircleColor(keywordData.grade)}`} fill="currentColor" />
+                      {gradeLabel(keywordData.grade)}
+                    </p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* 제목 패턴 */}
+            {/* 제목 패턴 분석 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
               <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> 제목 패턴 분석</p>
               <div className="grid grid-cols-3 gap-3">
@@ -1700,38 +2000,24 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 연관 키워드 */}
-            {analysis.relatedKeywords.length > 0 && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><Link2 className="w-3.5 h-3.5" /> 연관 키워드 분포 <span className="text-gray-400 font-normal">(본문 빈도 기준)</span></p>
-                <div className="flex flex-wrap gap-2">
-                  {analysis.relatedKeywords.map((r, i) => (
-                    <span key={i} className={`text-xs px-3 py-1 rounded-full font-medium ${
-                      i < 3 ? 'bg-blue-500 text-white' :
-                      i < 8 ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {r.word} <span className="opacity-70">({r.count})</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* 추천 해시태그 */}
             {analysis.topHashtags.length > 0 && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <div className="bg-white rounded-2xl p-5 shadow-sm relative overflow-hidden">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> 추천 해시태그</p>
-                  <button onClick={copyHashtags}
-                    className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
-                      hashtagCopied ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}>
-                    {hashtagCopied ? '복사됨 ✓' : '전체 복사'}
-                  </button>
+                  {isPro && (
+                    <button onClick={copyHashtags}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                        hashtagCopied ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}>
+                      {hashtagCopied ? '복사됨 ✓' : '전체 복사'}
+                    </button>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className={`flex flex-wrap gap-2 min-h-[120px] ${!isPro ? 'select-none pointer-events-none' : ''}`}>
                   {analysis.topHashtags.map((h, i) => (
-                    <span key={i} onClick={() => copySingleTag(h.tag)}
+                    <span key={i} onClick={() => isPro && copySingleTag(h.tag)}
                       className={`text-xs px-3 py-1 rounded-full font-medium cursor-pointer transition-opacity hover:opacity-80 ${
                         i < 3 ? 'bg-purple-500 text-white' :
                         i < 8 ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-500'
@@ -1740,6 +2026,15 @@ export default function DashboardPage() {
                     </span>
                   ))}
                 </div>
+                {!isPro && (
+                  <div className="absolute top-10 inset-x-0 bottom-0 backdrop-blur-sm bg-white/60 flex flex-col items-center justify-center gap-2 rounded-b-2xl">
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </div>
+                    <p className="text-sm font-bold text-gray-700">Pro 전용</p>
+                    <button onClick={() => window.open('/pricing', '_blank')} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-xl hover:bg-blue-600">Pro 업그레이드</button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1747,31 +2042,46 @@ export default function DashboardPage() {
             {analysis.insights.length > 0 && (
               <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
                 <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Lightbulb className="w-3.5 h-3.5" /> 알고리즘 인사이트 & 작성 전략</p>
-                <ul className="space-y-3">
-                  {analysis.insights.map((ins, i) => {
-                    const sep = ins.includes(' — ') ? ' — ' : ins.includes(' → ') ? ' → ' : null
-                    if (sep) {
-                      const idx = ins.indexOf(sep)
-                      const stat = ins.slice(0, idx)
-                      const desc = ins.slice(idx + sep.length)
+
+                {/* 인사이트 리스트 — 무료는 블러 오버레이 */}
+                <div className="relative overflow-hidden rounded-xl">
+                  <ul className={`space-y-3 ${!isPro ? 'select-none pointer-events-none' : ''}`}>
+                    {analysis.insights.map((ins, i) => {
+                      const sep = ins.includes(' — ') ? ' — ' : ins.includes(' → ') ? ' → ' : null
+                      if (sep) {
+                        const idx = ins.indexOf(sep)
+                        const stat = ins.slice(0, idx)
+                        const desc = ins.slice(idx + sep.length)
+                        return (
+                          <li key={i} className="bg-gray-50 rounded-xl px-4 py-3 space-y-1">
+                            <p className="text-sm font-bold text-blue-500">{stat}</p>
+                            <p className="text-xs text-gray-500 leading-relaxed">{desc}</p>
+                          </li>
+                        )
+                      }
                       return (
-                        <li key={i} className="bg-gray-50 rounded-xl px-4 py-3 space-y-1">
-                          <p className="text-sm font-bold text-blue-500">{stat}</p>
-                          <p className="text-xs text-gray-500 leading-relaxed">{desc}</p>
+                        <li key={i} className="bg-gray-50 rounded-xl px-4 py-3">
+                          <p className="text-sm text-gray-700 leading-relaxed">{ins}</p>
                         </li>
                       )
-                    }
-                    return (
-                      <li key={i} className="bg-gray-50 rounded-xl px-4 py-3">
-                        <p className="text-sm text-gray-700 leading-relaxed">{ins}</p>
-                      </li>
-                    )
-                  })}
-                </ul>
+                    })}
+                  </ul>
+                  {!isPro && (
+                    <div className="absolute inset-0 backdrop-blur-sm bg-white/60 flex flex-col items-center justify-center gap-2 rounded-xl">
+                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      </div>
+                      <p className="text-sm font-bold text-gray-700">Pro 전용</p>
+                      <button onClick={() => window.open('/pricing', '_blank')} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-xl hover:bg-blue-600">Pro 업그레이드</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 목표 스마트블록 — 헤더 항상 노출, 태그만 블러 */}
                 {analysis.smartBlocks.length > 0 && (
                   <div className="pt-3 border-t border-gray-100">
                     <p className="text-xs text-gray-500 mb-2">목표 스마트블록</p>
-                    <div className="flex flex-wrap gap-2">
+                    <div className={`flex flex-wrap gap-2 ${!isPro ? 'blur-sm select-none pointer-events-none' : ''}`}>
                       {analysis.smartBlocks.map((b, i) => (
                         <span key={i} className="text-xs bg-green-50 text-green-600 px-3 py-1 rounded-full">{b}</span>
                       ))}
@@ -1783,62 +2093,302 @@ export default function DashboardPage() {
 
             {/* 작성 포인트 */}
             {analysis.strategy && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4 relative overflow-hidden">
                 <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><PenLine className="w-3.5 h-3.5" /> 작성 포인트</p>
-
-                {analysis.strategy.titleStructure.length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium mb-2">제목 구조</p>
-                    <ul className="space-y-1.5">
-                      {analysis.strategy.titleStructure.map((t, i) => (
-                        <li key={i} className="flex gap-2 text-sm text-gray-700">
-                          <span className="text-blue-400 shrink-0">•</span>
-                          <span>{t}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {analysis.strategy.contentPoints.length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium mb-2">본문 구조</p>
-                    <ul className="space-y-1.5">
-                      {analysis.strategy.contentPoints.map((p, i) => (
-                        <li key={i} className="flex gap-2 text-sm text-gray-700">
-                          <span className="text-blue-400 shrink-0">•</span>
-                          <span>{p}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {analysis.relatedKeywords.length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium mb-2 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> 추천 서브 키워드</p>
-                    <div className="flex flex-wrap gap-2">
-                      {analysis.relatedKeywords.slice(0, 8).map((r, i) => (
-                        <span key={i} className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
-                          {r.word}
-                        </span>
-                      ))}
+                <div className={`space-y-4 ${!isPro ? 'select-none pointer-events-none' : ''}`}>
+                  {analysis.strategy.titleStructure.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-500 font-medium mb-2">제목 구조</p>
+                      <ul className="space-y-1.5">
+                        {analysis.strategy.titleStructure.map((t, i) => (
+                          <li key={i} className="flex gap-2 text-sm text-gray-700">
+                            <span className="text-blue-400 shrink-0">•</span>
+                            <span>{t}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
+                  )}
+                  {analysis.strategy.contentPoints.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-500 font-medium mb-2">본문 구조</p>
+                      <ul className="space-y-1.5">
+                        {analysis.strategy.contentPoints.map((p, i) => (
+                          <li key={i} className="flex gap-2 text-sm text-gray-700">
+                            <span className="text-blue-400 shrink-0">•</span>
+                            <span>{p}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                {!isPro && (
+                  <div className="absolute top-10 inset-x-0 bottom-0 backdrop-blur-sm bg-white/60 flex flex-col items-center justify-center gap-2 rounded-b-2xl">
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </div>
+                    <p className="text-sm font-bold text-gray-700">Pro 전용</p>
+                    <button onClick={() => window.open('/pricing', '_blank')} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-xl hover:bg-blue-600">Pro 업그레이드</button>
                   </div>
                 )}
               </div>
             )}
 
-            {/* 프롬프트 */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Copy className="w-3.5 h-3.5" /> Claude / ChatGPT에 붙여넣으세요</p>
-                <button onClick={copyPrompt}
-                  className={`text-sm px-4 py-2 rounded-lg font-medium transition-all ${copied ? 'bg-green-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>
-                  {copied ? '복사됨 ✓' : '프롬프트 복사'}
-                </button>
+            {/* 상위노출 필수 항목 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm relative overflow-hidden">
+              <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-gray-500" /> 상위노출 필수 항목</p>
+              {!isPro ? (
+                <>
+                  <div className="space-y-2.5 select-none pointer-events-none min-h-[180px]">
+                    <div className="flex flex-wrap gap-2">
+                      {['위치·교통', '메뉴·가격', '웨이팅', '주차', '분위기', '방문팁'].map((s, i) => (
+                        <span key={i} className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full">{s}</span>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {['음식 맛', '서비스', '재방문 의사', '포장·배달', '주변 정보'].map((s, i) => (
+                        <span key={i} className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full">{s}</span>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {['사진·인테리어', '주문 방법', '혼밥 가능 여부', '예약 필요'].map((s, i) => (
+                        <span key={i} className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full">{s}</span>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {['가성비', '특이사항', '재방문 계획', '추천 메뉴'].map((s, i) => (
+                        <span key={i} className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="absolute top-10 inset-x-0 bottom-0 backdrop-blur-sm bg-white/60 flex flex-col items-center justify-center gap-2 rounded-b-2xl">
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </div>
+                    <p className="text-sm font-bold text-gray-700">Pro 전용</p>
+                    <button onClick={() => window.open('/pricing', '_blank')} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-xl hover:bg-blue-600">Pro 업그레이드</button>
+                  </div>
+                </>
+              ) : sectionsLoading ? (
+                <div className="space-y-2 animate-pulse">
+                  {[0,1,2].map(i => <div key={i} className="h-8 bg-gray-100 rounded-lg" />)}
+                </div>
+              ) : commonSections.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {commonSections.map((s, i) => (
+                    <span key={i} className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full">{s.topic}</span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">분석 결과가 없어요</p>
+              )}
+            </div>
+
+            <div className="sticky bottom-4 z-10">
+              <button
+                onClick={() => { setMode('supplement-input'); window.scrollTo({ top: 0 }) }}
+                className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600 shadow-lg"
+              >
+                <span className="flex items-center justify-center gap-1">내 글 정보 입력하기 <ChevronRight className="w-4 h-4" /></span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── supplement-input ── */}
+        {mode === 'supplement-input' && (
+          <div className="space-y-4">
+            <button onClick={() => setMode('pattern-preview')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            <h2 className="text-xl font-bold pl-2">추가 정보 입력</h2>
+
+            {/* 참고사항 + 참고링크 */}
+            <h3 className="text-base font-bold pl-2">방문·사용 경험</h3>
+            <p className="text-gray-600 text-sm -mt-2 pl-2">아래 정보를 채울수록 더 구체적이고 좋은 글을 만들 수 있어요.</p>
+            <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">참고사항 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="가게 위치, 분위기, 메뉴 가격 등 글에 넣고 싶은 내용을 자유롭게 적어주세요"
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300 bg-white"
+                />
+                <div className="flex items-center justify-between mt-1">
+                  <p className="text-xs text-gray-400">직접 경험한 내용을 구체적으로 쓸수록 상위 노출 확률이 올라가요. 두서없이 막 적어도 괜찮아요.</p>
+                  {notes.trim() && <span className="text-xs text-blue-500 font-medium shrink-0 ml-2">✓ 프롬프트에 반영돼요</span>}
+                </div>
               </div>
-              <pre className="text-sm text-gray-700 bg-gray-50 rounded-xl p-4 whitespace-pre-wrap font-sans leading-relaxed">{prompt}</pre>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">참고 링크 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="네이버 지도·플레이스 링크를 붙여넣으세요"
+                    value={referenceLink}
+                    onChange={e => setReferenceLink(e.target.value)}
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300 bg-white"
+                  />
+                  <button
+                    onClick={extractPlace}
+                    disabled={!referenceLink.trim() || placeLoading}
+                    className="px-4 py-3 bg-blue-500 text-white rounded-xl text-sm font-medium hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {placeLoading ? '불러오는 중...' : '가게정보 불러오기'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">네이버 지도·플레이스 링크를 붙여넣으면 가게 정보를 자동으로 불러와요. 장소 후기에 유용해요.</p>
+                {placeError && <p className="text-red-500 text-xs mt-1">{placeError}</p>}
+              </div>
+            </div>
+
+            <h3 className="text-base font-bold pl-2 mt-10 flex items-center gap-2">상위노출 최적화 체크리스트 <span className="text-xs font-semibold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">Pro 전용</span></h3>
+            <p className="text-gray-600 text-sm -mt-2 pl-2">
+              상위노출을 위해 꼭 담아야 할 항목들이에요. <span className="text-blue-500">체크되지 않은 항목에 내용을 입력하면</span> 자동으로 체크돼요. <span className="inline-block bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full font-medium">선택사항</span>이지만 많이 채울수록 상위 노출 확률이 올라가요.
+            </p>
+
+            {!isPro ? (
+              <div className="bg-white rounded-2xl p-5 shadow-sm relative overflow-hidden">
+                <div className="space-y-3 select-none pointer-events-none">
+                  {['위치·교통', '메뉴·가격', '웨이팅', '주차'].map((topic, i) => (
+                    <div key={i} className="rounded-2xl p-5 bg-blue-50">
+                      <div className="flex items-start gap-3">
+                        <div className="w-5 h-5 rounded shrink-0 mt-0.5 border-2 bg-white border-gray-300" />
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm text-gray-800">{topic} <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full font-medium">추가필요</span></p>
+                          <div className="mt-2 h-8 bg-gray-100 rounded-xl" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="absolute inset-0 backdrop-blur-sm bg-white/60 flex flex-col items-center justify-center gap-3 rounded-2xl">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  </div>
+                  <p className="text-base font-bold text-gray-700">Pro 전용</p>
+                  <p className="text-base text-gray-500 flex items-center justify-center gap-1">체크리스트 활용 시 상위노출 확률 최대 <span className="text-xl font-bold text-blue-500">60%</span> 상승<TrendingUp className="w-4 h-4 text-blue-400" /></p>
+                  <button onClick={() => window.open('/pricing', '_blank')} className="px-5 py-2.5 bg-blue-500 text-white text-base font-semibold rounded-xl hover:bg-blue-600">Pro 업그레이드</button>
+                </div>
+              </div>
+            ) : sectionsLoading ? (
+              <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="relative w-12 h-12">
+                    <div className="absolute inset-0 rounded-full border-4 border-purple-100"></div>
+                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-purple-400 animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center text-lg">✨</div>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500 font-medium">상위 노출 글 공통 패턴 분석 중...</p>
+                <p className="text-xs text-gray-400 mt-1">분석하고 있어요.</p>
+              </div>
+            ) : commonSections.length === 0 ? (
+              <div className="bg-white rounded-2xl p-5 shadow-sm text-center text-gray-400 text-sm">
+                공통 섹션 분석 결과가 없어요. 그냥 프롬프트를 생성해주세요.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {commonSections.map(section => {
+                  const coveredByNotes = isCoveredInNotes(section.topic)
+                  const covered = coveredByNotes || !!(supplementMap[section.topic]?.trim())
+                  return (
+                    <div key={section.topic} className={`rounded-2xl p-5 shadow-sm ${covered ? 'bg-white opacity-70' : 'bg-blue-50'}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`w-5 h-5 rounded shrink-0 mt-0.5 border-2 flex items-center justify-center ${covered ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'}`}>
+                          {covered && (
+                            <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                              <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className={`font-semibold text-sm ${covered ? 'text-gray-400 italic' : 'text-gray-800'}`}>
+                            {section.topic}
+                            {!covered && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full font-medium">추가필요</span>}
+                            {covered && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-medium">작성완료</span>}
+                          </p>
+                          <p className={`text-xs text-gray-500 mt-0.5 leading-relaxed ${covered ? 'italic' : ''}`}><span className="text-gray-600 font-medium">예:</span> {section.note}</p>
+                          {!coveredByNotes && (
+                            <textarea
+                              value={supplementMap[section.topic] || ''}
+                              onChange={e => setSupplementMap(prev => ({ ...prev, [section.topic]: e.target.value }))}
+                              placeholder="이 항목에 대해 작성할 내용을 입력하세요."
+                              rows={2}
+                              className="mt-3 w-full px-4 py-2 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-300 bg-white"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <div className="h-4" />
+          </div>
+        )}
+
+        {mode === 'supplement-input' && (
+          <div className="sticky bottom-0 left-0 right-0 px-4 pt-8 pb-3 flex flex-col gap-2 bg-gradient-to-t from-white via-white to-transparent">
+            <button
+              onClick={proceedToPrompt}
+              className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600"
+            >
+              {Object.values(supplementMap).some(v => v.trim()) ? <span className="flex items-center justify-center gap-1">추가하고 프롬프트 생성 <ChevronRight className="w-4 h-4" /></span> : <span className="flex items-center justify-center gap-1">프롬프트 생성 <ChevronRight className="w-4 h-4" /></span>}
+            </button>
+            {!sectionsLoading && Object.values(supplementMap).some(v => v.trim()) && (
+              <button
+                onClick={() => { setSupplementMap({}); proceedToPrompt() }}
+                className="w-full text-gray-400 text-sm py-2 hover:text-gray-600"
+              >
+                입력 내용 없이 건너뛰기
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── result ── */}
+        {mode === 'result' && analysis && (
+          <div className="space-y-4">
+            <button onClick={() => { setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink(''); setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setMode('write-input') }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            <div className="flex items-center justify-between pl-2">
+              <div>
+                <h2 className="text-xl font-bold">상위노출 프롬프트</h2>
+                <p className="text-sm text-gray-400 mt-2 flex items-center gap-1.5"><Copy className="w-3.5 h-3.5" /> 사용하는 AI에 붙여넣으세요</p>
+              </div>
+              <button onClick={() => { navigator.clipboard.writeText(prompt); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                className={`text-sm px-4 py-2 rounded-lg font-medium transition-all ${copied ? 'bg-green-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>
+                {copied ? '복사됨 ✓' : '전체 프롬프트 복사'}
+              </button>
+            </div>
+
+            {/* 프롬프트 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5 mb-2"><span className="text-gray-400">•</span> 제목</p>
+                <pre className="text-sm text-gray-700 bg-gray-50 rounded-xl p-4 whitespace-pre-wrap font-sans leading-relaxed">{(() => {
+                  const sep = '━━━ 본문 작성 ━━━'
+                  return prompt.includes(sep) ? prompt.split(sep)[0].trimEnd() : prompt
+                })()}</pre>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5 mb-2"><span className="text-gray-400">•</span> 본문</p>
+                {isPro && prompt.includes('━━━ 본문 작성 ━━━') ? (
+                  <pre className="text-sm text-gray-700 bg-gray-50 rounded-xl p-4 whitespace-pre-wrap font-sans leading-relaxed">{'━━━ 본문 작성 ━━━' + prompt.split('━━━ 본문 작성 ━━━')[1]}</pre>
+                ) : (
+                  <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-5 flex items-start gap-3">
+                    <svg className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-gray-800 mb-1.5">상위노출을 결정하는 건 제목이 아니라 <span className="text-blue-500">본문</span>이에요</p>
+                      <p className="text-xs text-gray-500 mb-3 leading-relaxed">실제 상위노출을 만드는 본문 최적화 전략·해시태그·전체 프롬프트는 Pro에서만 사용할 수 있어요.</p>
+                      <button onClick={() => window.open('/pricing', '_blank')} className="text-sm font-semibold text-blue-500 hover:text-blue-700">Pro 업그레이드 하러 가기 →</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
           </div>
@@ -1850,11 +2400,11 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold mb-2 pl-2">황금키워드 발굴</h2>
             <p className="text-gray-400 text-sm mb-6 pl-2">내 블로그 카테고리를 선택하세요</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {CATEGORIES.map(cat => (
+              {CATEGORIES.filter(cat => cat.id !== 'wedding').map(cat => (
                 <button
                   key={cat.id}
                   onClick={() => startGolden(cat.id)}
-                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
+                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md hover:bg-gray-50/70 p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
                 >
                   <cat.icon className={`w-6 h-6 mb-2 ${cat.color}`} />
                   <p className="font-medium text-sm">{cat.label}</p>
@@ -1935,7 +2485,6 @@ export default function DashboardPage() {
                   </thead>
                   <tbody>
                     {goldenResults.map((kw, i) => (
-                      <>
                         <tr
                           key={kw.keyword}
                           className="border-b border-gray-50 hover:bg-gray-50 transition-colors"
@@ -1958,18 +2507,17 @@ export default function DashboardPage() {
                           <td className="px-3 py-3 text-center text-gray-600">{kw.blog_count?.toLocaleString() ?? '-'}</td>
                           <td className="px-3 py-3">
                             <div className="flex items-center justify-center gap-1 text-[11px] text-green-600 font-medium">
-                              <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                              <Circle className="w-2 h-2 text-green-500 shrink-0" fill="currentColor" />
                               <span>{kw.competition_label}</span>
                             </div>
                           </td>
                           <td className="px-3 py-3 text-center">
                             <div className="flex items-center justify-center gap-1">
-                              <button onClick={() => goToWrite(kw.keyword, [kw.keyword])} className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">검색형 <ChevronRight className="w-2.5 h-2.5" /></button>
+                              <button onClick={() => startGoldenGuide(kw.keyword)} className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">검색형 <ChevronRight className="w-2.5 h-2.5" /></button>
                               <button onClick={() => goToFeed(kw.keyword)} className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">노출형 <ChevronRight className="w-2.5 h-2.5" /></button>
                             </div>
                           </td>
                         </tr>
-                      </>
                     ))}
                   </tbody>
                 </table>
@@ -2013,7 +2561,7 @@ export default function DashboardPage() {
                 disabled={!insightKeyword.trim()}
                 className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
               >
-                분석 시작 →
+                <span className="flex items-center justify-center gap-1">분석 시작 <ChevronRight className="w-4 h-4" /></span>
               </button>
             </div>
           </div>
@@ -2045,11 +2593,11 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold mb-2 pl-2">트렌드·이슈 글감 발굴</h2>
             <p className="text-gray-400 text-sm mb-6 pl-2">내 블로그 카테고리를 선택하세요</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {CATEGORIES.map(cat => (
+              {CATEGORIES.filter(cat => cat.id !== 'wedding').map(cat => (
                 <button
                   key={cat.id}
                   onClick={() => startTrend(cat.id)}
-                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
+                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md hover:bg-gray-50/70 p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
                 >
                   <cat.icon className={`w-6 h-6 mb-2 ${cat.color}`} />
                   <p className="font-medium text-sm">{cat.label}</p>
@@ -2130,11 +2678,11 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold mb-2 pl-2">검색 트렌드</h2>
             <p className="text-gray-400 text-sm mb-6 pl-2">카테고리를 선택하면 지금 뜨는 키워드를 보여드려요</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {CATEGORIES.map(cat => (
+              {CATEGORIES.filter(cat => cat.id !== 'wedding').map(cat => (
                 <button
                   key={cat.id}
                   onClick={() => startSearchTrend(cat.id)}
-                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
+                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md hover:bg-gray-50/70 p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
                 >
                   <cat.icon className={`w-6 h-6 mb-2 ${cat.color}`} />
                   <p className="font-medium text-sm">{cat.label}</p>
@@ -2278,7 +2826,7 @@ export default function DashboardPage() {
                 </span>
               )}
             </h2>
-            <p className="text-gray-400 text-sm -mt-2 pl-2">오늘 가장 많이 읽힌 뉴스로 블로그 글감을 만들어보세요</p>
+            <p className="text-gray-400 text-sm -mt-2 pl-2">오늘 화제의 뉴스로 블로그 글감을 만들어보세요</p>
 
             {newsRankingError && <p className="text-red-500 text-sm">{newsRankingError}</p>}
 
@@ -2286,7 +2834,7 @@ export default function DashboardPage() {
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-5 pt-4 pb-3 border-b border-gray-50 flex items-center justify-between gap-3">
                   <span className="flex-1 text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Newspaper className="w-3.5 h-3.5" /> 인기 뉴스 TOP {newsRankingItems.length}</span>
-                  <span className="shrink-0 w-28 text-xs font-medium text-gray-400 text-center">글쓰기</span>
+                  <span className="shrink-0 w-[150px] text-xs font-medium text-gray-400 text-center">글쓰기</span>
                 </div>
                 <ul className="divide-y divide-gray-50">
                   {newsRankingItems.map((item, i) => (
@@ -2296,7 +2844,7 @@ export default function DashboardPage() {
                           <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
                           <span className="text-sm text-gray-700 leading-snug">{item.title}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0 w-[150px] justify-end">
                           <button
                             onClick={() => goToWrite(item.title, [])}
                             className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-0.5"
@@ -2320,6 +2868,267 @@ export default function DashboardPage() {
                 <Newspaper className="w-8 h-8 mx-auto mb-3 text-gray-300" />
                 <p className="font-medium mb-1">뉴스를 불러오지 못했어요</p>
                 <p className="text-sm">잠시 후 다시 시도해주세요</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── golden-guide ── */}
+        {mode === 'golden-guide' && (
+          <div className="space-y-5">
+            <button onClick={() => setMode('golden-result')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            <div>
+              <h2 className="text-xl font-bold pl-2 mb-1">
+                <span className="text-blue-500">'{guideKeyword}'</span> 글쓰기 가이드
+              </h2>
+              <p className="text-gray-400 text-sm pl-2">상위노출 글 패턴과 추천 주제를 확인하고 바로 글쓰기를 시작하세요</p>
+            </div>
+
+            {/* 상위노출 글들은 이렇게 써요 */}
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-50">
+                <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                  <Trophy className="w-4 h-4 text-yellow-400" /> 상위노출 글들은 이렇게 써요
+                </p>
+              </div>
+              {guideTitles === 'loading' ? (
+                <div className="px-5 py-6 space-y-2 animate-pulse">
+                  {[0,1,2,3,4].map(i => <div key={i} className="h-4 bg-gray-100 rounded w-full" />)}
+                </div>
+              ) : !guideTitles || guideTitles.length === 0 ? (
+                <div className="px-5 py-6 text-center text-sm text-gray-400">상위노출 제목을 불러오지 못했어요</div>
+              ) : (
+                <ul className="divide-y divide-gray-50">
+                  {guideTitles.map((title, i) => (
+                    <li key={i} className="px-5 py-3 flex items-start gap-2">
+                      <span className="text-xs text-gray-300 font-medium shrink-0 mt-0.5">#{String(i + 1).padStart(2, '0')}</span>
+                      <span className="text-sm text-gray-700">{title}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* 이런 주제로 써보세요 */}
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-50">
+                <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                  <Lightbulb className="w-4 h-4 text-blue-400" /> 이런 주제로 써보세요
+                </p>
+              </div>
+              {guideIdeas === 'loading' ? (
+                <div className="px-5 py-4">
+                  <KeywordIdeaSkeleton />
+                </div>
+              ) : !guideIdeas || guideIdeas.length === 0 ? (
+                <div className="px-5 py-6 text-center text-sm text-gray-400">추천 아이디어를 불러오지 못했어요</div>
+              ) : (
+                <ul className="divide-y divide-gray-50">
+                  {(guideIdeas as KeywordIdea[]).map((idea, i) => (
+                    <li key={i} className="px-5 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 mb-1.5">{idea.title}</p>
+                          <ul className="space-y-1">
+                            {idea.points.map((pt, j) => (
+                              <li key={j} className="text-xs text-gray-500 flex gap-1.5">
+                                <span className="shrink-0 text-sm text-gray-400 leading-none">·</span>{pt}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <button
+                          onClick={() => goToWrite(idea.title, [guideKeyword])}
+                          className="shrink-0 text-xs text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-0.5 whitespace-nowrap"
+                        >
+                          이걸로 쓸게요 <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── niche-home ── */}
+        {activeTab === 'niche' && mode === 'niche-home' && (
+          <div className="space-y-6">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-xl font-bold">틈새 인사이트</h2>
+                <span className="text-xs bg-orange-50 text-orange-500 px-2 py-0.5 rounded-full font-medium">미리보기</span>
+              </div>
+              <p className="text-sm text-gray-400">지금 뜨고 있는 마이크로 니치 시장의 화제 글감을 발굴해보세요</p>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <p className="text-sm font-bold text-gray-800">오늘의 핫 틈새</p>
+                <span className="text-xs text-gray-400">목업 데이터</span>
+              </div>
+              <div className="space-y-3">
+                {MOCK_HOT_NICHES.map(niche => (
+                  <div key={niche.slug} className="bg-white rounded-2xl p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xs font-bold text-gray-300 mt-0.5 w-4 shrink-0">#{niche.rank}</span>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            {(() => { const cfg = NICHE_CONFIG[niche.slug]; return cfg ? <cfg.icon className={`w-4 h-4 shrink-0 ${cfg.color}`} /> : null })()}
+                            <span className="font-semibold text-gray-900 text-sm">{niche.name}</span>
+                            <span className="text-xs text-green-500 font-medium">+{niche.weekly_increase_pct}%</span>
+                            <span className="text-xs text-gray-400">화제글 {niche.hot_post_count}건</span>
+                          </div>
+                          <p className="text-sm text-gray-600">"{niche.headline}"</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { setNicheDetailSlug(niche.slug); setNicheDetailTab('hot-posts'); setMode('niche-detail') }}
+                        className="shrink-0 text-xs text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-0.5"
+                      >
+                        상세보기 <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <p className="text-sm font-semibold text-gray-800 mb-3">다른 틈새 찾기</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="틈새 키워드를 입력하세요 (예: 미니멀라이프, 부업)"
+                  disabled
+                  className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none placeholder:text-gray-300 bg-gray-50 cursor-not-allowed"
+                />
+                <button disabled className="px-4 py-2.5 bg-blue-500 text-white rounded-xl text-sm font-medium opacity-40 cursor-not-allowed">검색</button>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                <span className="text-xs text-gray-400">자주 검색되는 틈새:</span>
+                {['신혼여행', '부업', '미니멀라이프', '타로', '투자', '다이어트'].map(tag => (
+                  <span key={tag} className="text-xs bg-gray-50 text-gray-400 px-2.5 py-1 rounded-full border border-gray-100">#{tag}</span>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-3 text-center">틈새 검색 기능은 준비 중이에요</p>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <p className="text-sm font-semibold text-gray-800 mb-2">내 즐겨찾기</p>
+              <p className="text-sm text-gray-400 text-center py-4">즐겨찾기 기능은 준비 중이에요</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── niche-detail ── */}
+        {activeTab === 'niche' && mode === 'niche-detail' && nicheDetailSlug === 'wedding' && (
+          <div className="space-y-4">
+            <button onClick={() => setMode('niche-home')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <Gem className="w-5 h-5 text-pink-400" />
+                <h2 className="text-xl font-bold">웨딩</h2>
+                <span className="text-xs bg-orange-50 text-orange-500 px-2 py-0.5 rounded-full font-medium">미리보기</span>
+              </div>
+              <p className="text-sm text-gray-400">다이렉트결혼준비 · 맥마웨 · 네이버 검색 데이터 기반</p>
+            </div>
+
+            <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+              <button
+                onClick={() => setNicheDetailTab('hot-posts')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${nicheDetailTab === 'hot-posts' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <Flame className="w-3.5 h-3.5 text-red-400" /> 화제글
+              </button>
+              <button
+                onClick={() => setNicheDetailTab('pain-points')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${nicheDetailTab === 'pain-points' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <Lightbulb className="w-3.5 h-3.5 text-yellow-400" /> 페인포인트
+              </button>
+            </div>
+
+            {nicheDetailTab === 'hot-posts' && (
+              <div className="space-y-3">
+                <p className="text-xs text-gray-400 pl-1">실시간 화제글 TOP 6 (목업 데이터)</p>
+                {MOCK_WEDDING_HOT_POSTS.map((post, i) => (
+                  <div key={i} className="bg-white rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full shrink-0">{post.source_label}</span>
+                          <span className="text-xs text-gray-400">댓글 {post.comments}</span>
+                        </div>
+                        <p className="text-sm font-medium text-gray-800 leading-snug">{post.title}</p>
+                        <span className="flex items-center gap-1 text-xs text-blue-500 mt-1.5"><Lightbulb className="w-3 h-3 shrink-0" />{post.suggested_idea}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => goToWrite(post.suggested_idea, [])}
+                          className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-0.5"
+                        >
+                          검색형 <ChevronRight className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => goToFeed(post.suggested_idea)}
+                          className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center gap-0.5"
+                        >
+                          노출형 <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {nicheDetailTab === 'pain-points' && (
+              <div className="space-y-3">
+                <p className="text-xs text-gray-400 pl-1">이번 주 주요 페인포인트 TOP 5 (목업 데이터)</p>
+                {MOCK_WEDDING_PAIN_POINTS.map(pp => (
+                  <div key={pp.rank} className="bg-white rounded-2xl p-5 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <span className="shrink-0 w-6 h-6 flex items-center justify-center bg-orange-50 text-orange-500 text-xs font-bold rounded-full">#{pp.rank}</span>
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <p className="font-semibold text-gray-900 text-sm leading-snug">{pp.pain_point}</p>
+                          <span className="shrink-0 text-xs text-gray-400">{pp.mention_count}건 언급</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {pp.related_keywords.map((kw, j) => (
+                            <span key={j} className="text-xs bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full">{kw}</span>
+                          ))}
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-3 mb-3 space-y-1">
+                          {pp.sample_quotes.map((q, j) => (
+                            <p key={j} className="text-xs text-gray-500">"{q}"</p>
+                          ))}
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-xs text-blue-600 font-medium flex items-center gap-1"><Lightbulb className="w-3 h-3 shrink-0" />{pp.suggested_idea}</p>
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => goToWrite(pp.suggested_idea, pp.related_keywords)}
+                              className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-0.5"
+                            >
+                              검색형 <ChevronRight className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => goToFeed(pp.suggested_idea)}
+                              className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center gap-0.5"
+                            >
+                              노출형 <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -2461,6 +3270,18 @@ function ShortentsIdeaBlock({ ideasState, onWriteSearch, onWriteFeed }: { ideasS
   )
 }
 
+function gradeCircleColor(grade: string): string {
+  if (grade.includes('🟢')) return 'text-green-500'
+  if (grade.includes('🟡')) return 'text-yellow-400'
+  if (grade.includes('🟠')) return 'text-orange-400'
+  if (grade.includes('🔴')) return 'text-red-500'
+  return 'text-gray-400'
+}
+
+function gradeLabel(grade: string): string {
+  return grade.replace(/[🟢🟡🟠🔴⚫⏳]\s*/u, '').trim()
+}
+
 function competitionClass(color: string) {
   if (color === 'green') return 'text-green-600 bg-green-50'
   if (color === 'yellow') return 'text-yellow-600 bg-yellow-50'
@@ -2496,7 +3317,7 @@ function InsightTable({ title, icon, items }: { title: string; icon?: 'chart' | 
                 </td>
                 <td className="py-2.5 text-center">
                   <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${competitionClass(item.competition.color)}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${item.competition.color === 'green' ? 'bg-green-500' : item.competition.color === 'yellow' ? 'bg-yellow-400' : item.competition.color === 'orange' ? 'bg-orange-400' : 'bg-red-400'}`} />
+                    <Circle className={`w-2 h-2 ${item.competition.color === 'green' ? 'text-green-500' : item.competition.color === 'yellow' ? 'text-yellow-400' : item.competition.color === 'orange' ? 'text-orange-400' : 'text-red-400'}`} fill="currentColor" />
                     {item.competition.label}
                   </span>
                 </td>
