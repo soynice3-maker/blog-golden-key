@@ -32,7 +32,7 @@ export default function LoginPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        router.replace('/dashboard')
+        router.replace('/')
       } else {
         setAuthChecking(false)
       }
@@ -109,7 +109,7 @@ export default function LoginPage() {
       } else {
         localStorage.setItem('bgk-stay-logged-in', stayLoggedIn ? 'true' : 'false')
         sessionStorage.setItem('bgk-session-active', 'true')
-        router.replace('/dashboard')
+        router.replace('/')
       }
     }
     setLoading(false)

@@ -210,28 +210,30 @@ export async function POST(request: NextRequest) {
   const startDate = new Date(endDate)
   startDate.setDate(startDate.getDate() - 30)
 
-  const topicWords = topic.split(/\s+/).filter((w: string) => w.length > 1).slice(0, 2)
-  const keywords = topicWords.length > 0 ? topicWords : [topic]
+  const topicWords = topic.split(/\s+/).filter((w: string) => w.length > 1)
+  const adKwList = topicWords.slice(0, 2).length > 0 ? topicWords.slice(0, 2) : [topic]
+  const datalabKeyword = topicWords.slice(0, 2).join(' ') || topic
 
   const base = {
     startDate: formatDate(startDate),
     endDate: formatDate(endDate),
     timeUnit: 'date',
-    keywordGroups: [{ groupName: topic, keywords }],
+    keywordGroups: [{ groupName: topic, keywords: [datalabKeyword] }],
   }
 
-  const [male, female, teen, twenty, thirty, forty, fifty, sixty, newsRes, blogRes, adRes] = await Promise.all([
+  const [male, female, teen, twenty, thirty, forty, fifty, sixty, overall, newsRes, blogRes, adRes] = await Promise.all([
     datalabCall({ ...base, gender: 'm' }),
     datalabCall({ ...base, gender: 'f' }),
-    datalabCall({ ...base, ages: ['2'] }),        // 10대 (13~18)
-    datalabCall({ ...base, ages: ['3', '4'] }),   // 20대 (19~29)
-    datalabCall({ ...base, ages: ['5', '6'] }),   // 30대 (30~39)
-    datalabCall({ ...base, ages: ['7', '8'] }),   // 40대 (40~49)
-    datalabCall({ ...base, ages: ['9', '10'] }),  // 50대 (50~59)
-    datalabCall({ ...base, ages: ['11'] }),        // 60대+ (60~)
+    datalabCall({ ...base, ages: ['2'] }),
+    datalabCall({ ...base, ages: ['3', '4'] }),
+    datalabCall({ ...base, ages: ['5', '6'] }),
+    datalabCall({ ...base, ages: ['7', '8'] }),
+    datalabCall({ ...base, ages: ['9', '10'] }),
+    datalabCall({ ...base, ages: ['11'] }),
+    datalabCall(base),
     naverSearch('news', topic, 5),
-    naverSearch('blog', keywords.join(' '), 1),
-    queryKeywords(keywords).catch(() => [] as any[]),
+    naverSearch('blog', topic, 1),
+    queryKeywords(adKwList).catch(() => [] as any[]),
   ])
 
   // 성별 분포
@@ -275,7 +277,7 @@ export async function POST(request: NextRequest) {
   const parseCount = (v: number | string) => typeof v === 'number' ? v : v === '<10' ? 5 : Number(v) || 0
   const adList = adRes as any[]
   let pcVolume = 0, mobileVolume = 0
-  for (const kw of keywords) {
+  for (const kw of adKwList) {
     const clean = kw.replace(/\s/g, '').toLowerCase()
     const match = adList.find((r: any) => r.relKeyword?.replace(/\s/g, '').toLowerCase() === clean)
     if (match) {
@@ -294,6 +296,30 @@ export async function POST(request: NextRequest) {
     mobileVolume = parseCount(best.monthlyMobileQcCnt)
   }
   const searchVolume = { pc: pcVolume, mobile: mobileVolume, total: pcVolume + mobileVolume }
+
+  // 기기별 비율
+  const deviceTotal = pcVolume + mobileVolume || 1
+  const deviceRatio = {
+    pc: Math.round((pcVolume / deviceTotal) * 100),
+    mobile: Math.round((mobileVolume / deviceTotal) * 100),
+  }
+
+  // 요일별 평균 (0=월 ~ 6=일)
+  function computeWeekday(data: any[] | undefined | null): number[] {
+    if (!data || data.length === 0) return Array(7).fill(0)
+    const sums = Array(7).fill(0)
+    const counts = Array(7).fill(0)
+    for (const d of data) {
+      if (!d.period) continue
+      const dow = (new Date(d.period).getDay() + 6) % 7
+      sums[dow] += d.ratio || 0
+      counts[dow]++
+    }
+    return sums.map((s, i) => counts[i] > 0 ? Math.round(s / counts[i]) : 0)
+  }
+  const weekdayRaw = computeWeekday(overall?.results?.[0]?.data)
+  const weekdayMax = Math.max(...weekdayRaw, 1)
+  const weekdayRatio = weekdayRaw.map(v => Math.round((v / weekdayMax) * 100))
 
   // 트렌드 감지 (최근 7일 vs 이전 7일, 30% 이상 상승)
   function computeTrend(data: any[] | undefined | null): boolean {
@@ -321,6 +347,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     genderRatio,
     ageRatio,
+    deviceRatio,
+    weekdayRatio,
     newsHeadlines,
     blogCount,
     searchVolume,
