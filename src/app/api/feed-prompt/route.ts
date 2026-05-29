@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 })
 
-  const { topic, snippet, notes, titleDir, style, hashtags, genderRatio, ageRatio } = await request.json()
+  const { topic, snippet, notes, titleDir, style, hashtags, genderRatio, ageRatio, contentType } = await request.json()
   if (!topic) return NextResponse.json({ error: '주제가 필요합니다' }, { status: 400 })
 
   const hashtagLine = Array.isArray(hashtags) && hashtags.length > 0
@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
       { label: '20대', v: ageRatio.twenty },
       { label: '30대', v: ageRatio.thirty },
       { label: '40대', v: ageRatio.forty },
-      { label: '50대+', v: ageRatio.fifty },
+      { label: '50대', v: ageRatio.fifty },
+      { label: '60대+', v: ageRatio.sixty },
     ]
     const top = ages.sort((a, b) => b.v - a.v).slice(0, 2).filter(a => a.v > 0)
     if (top.length > 0) audienceLines.push(`주요 연령: ${top.map(a => `${a.label}(${a.v}%)`).join(', ')}`)
@@ -38,36 +39,33 @@ export async function POST(request: NextRequest) {
     ? `\n[독자 분석]\n${audienceLines.join('\n')}\n→ 위 독자층의 관심사와 언어 습관에 맞게 글을 써주세요.`
     : ''
 
-  const prompt = `당신은 네이버 홈피드 블로그 전문 작가입니다.
+  const charGuide = contentType === 'image' ? '400~600자 내외 (이미지 중심 포스팅)' : '600~1000자 내외 (텍스트 중심 포스팅)'
 
-[뉴스 주제]
-${topic}
-${snippet ? `\n[뉴스 내용 요약]\n${snippet}` : ''}
-${notes ? `\n[작성자가 다루고 싶은 내용]\n${notes}` : ''}
+  const prompt = `네이버 홈피드 상위노출 블로그 글 작성 요청
 
+주제: ${topic}
+
+━━━ 제목 작성 ━━━
 [제목 방향]: ${titleDir || '감성형'}
+[제목 작성 규칙]
+- 뉴스 헤드라인처럼 요약하지 말고, 기사에서 가장 자극적이거나 궁금증을 유발하는 한 가지 사실을 훅으로 뽑아서 '${titleDir || '감성형'}' 방식으로 작성
+- 검색 키워드 나열 X
+- 따옴표 독백 패턴 X (예: '어? 이게 왜?', '뭔가 이상한데...')
+
+━━━ 본문 작성 ━━━
 [글 스타일]: ${style || '스토리텔링'}
-${audienceGuide}
-
-위 내용을 바탕으로 네이버 홈피드 상위노출에 최적화된 블로그 글쓰기 프롬프트를 만들어주세요.
-
-홈피드 최적화 원칙:
-- 제목: 호기심·감성·공감 유발 (검색 키워드 X), '${titleDir || '감성형'}' 방식으로 작성
-- 도입부: 개인 경험·공감 스토리로 시작
+[분량]: ${charGuide}
+${audienceGuide ? audienceGuide : ''}
+[본문 작성 규칙]
+- 도입부: 독자에게 말 걸듯 시작 — 블로거 본인의 생각이나 시각이 담기면 됨, 구어체로 작성
 - 본문: '${style || '스토리텔링'}' 스타일로, 짧은 문단·질문형 전개·시각적 구분
-- 체류시간: 스토리텔링 + 정보 혼합 구조
-- 마무리: 공유·댓글 유도${hashtagLine ? `\n- 해시태그: ${hashtagLine}` : ''}
+- 체류시간: 정보 + 블로거 시각 혼합 구조
+- 마무리: 공유·댓글 유도${snippet ? `\n[참고 기사 — 활용 방식]\n${snippet}\n→ 뉴스처럼 보도·요약 X. 이 정보를 발견한 블로거가 독자에게 말 걸듯 전달하는 방식으로 활용` : ''}${notes ? `\n[더 담을 내용]\n${notes}` : ''}
 
-아래 형식으로 출력해주세요:
+━━━ 해시태그 ━━━
+${hashtagLine || '관련 해시태그 5~7개'}
 
-## 제목 아이디어 (3가지)
-1. [${titleDir || '감성형'}]
-2. [${titleDir || '감성형'}]
-3. [${titleDir || '감성형'}]
-
-## 글쓰기 프롬프트
-(Claude/GPT에 붙여넣을 완성된 프롬프트. 도입부-본문구조-마무리 지침 포함)
-${hashtagLine ? `\n## 해시태그\n${hashtagLine}` : ''}`
+위 내용을 반영해서 제목부터 해시태그까지 완성해줘.`
 
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })

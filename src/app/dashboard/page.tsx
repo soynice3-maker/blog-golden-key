@@ -583,8 +583,9 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [isPro, setIsPro] = useState(false)
+  const [showProModal, setShowProModal] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [mode, setMode] = useState<'write-input' | 'analyzing' | 'pattern-preview' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'golden-guide' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result' | 'feed-input' | 'feed-analyze' | 'feed-loading' | 'feed-result' | 'search-trend-category' | 'search-trend-loading' | 'search-trend-result' | 'niche-home' | 'niche-detail'>('keyword-insight-input')
+  const [mode, setMode] = useState<'write-input' | 'analyzing' | 'pattern-preview' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'golden-guide' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result' | 'feed-input' | 'feed-analyze' | 'feed-title' | 'feed-body' | 'feed-loading' | 'feed-result' | 'search-trend-category' | 'search-trend-loading' | 'search-trend-result' | 'niche-home' | 'niche-detail'>('keyword-insight-input')
   const [activeTab, setActiveTab] = useState<'keyword' | 'content' | 'prompt' | 'niche'>('keyword')
   const [activeSubTab, setActiveSubTab] = useState<'insight' | 'golden' | 'trend' | 'news' | 'search-trend'>('insight')
   const [promptSubTab, setPromptSubTab] = useState<'search' | 'feed'>('search')
@@ -658,14 +659,19 @@ export default function DashboardPage() {
   const [feedPrompt, setFeedPrompt] = useState('')
   const [feedError, setFeedError] = useState('')
   const [feedCopied, setFeedCopied] = useState(false)
-  const [feedOrigin, setFeedOrigin] = useState<'news' | 'tab'>('tab')
+  const [feedOrigin, setFeedOrigin] = useState<'news' | 'tab' | 'trend'>('tab')
+  const [writeOrigin, setWriteOrigin] = useState<'trend' | null>(null)
   const [feedAnalysis, setFeedAnalysis] = useState<any>(null)
   const [feedAnalysisLoading, setFeedAnalysisLoading] = useState(false)
   const [feedTitleDir, setFeedTitleDir] = useState('감성형')
   const [feedStyle, setFeedStyle] = useState('스토리텔링')
   const [newsExpandedItem, setNewsExpandedItem] = useState<string | null>(null)
   const [articleBodyExpanded, setArticleBodyExpanded] = useState(true)
-  const [includeArticleInPrompt, setIncludeArticleInPrompt] = useState(true)
+  const [includeArticleInPrompt, setIncludeArticleInPrompt] = useState(false)
+  const [includeAudienceInPrompt, setIncludeAudienceInPrompt] = useState(false)
+  const [feedContentType, setFeedContentType] = useState<'image' | 'text'>('text')
+  const [feedTitles, setFeedTitles] = useState<string[]>([])
+  const [feedCustomTitle, setFeedCustomTitle] = useState('')
 
   const [nicheDetailSlug, setNicheDetailSlug] = useState<string | null>(null)
   const [nicheDetailTab, setNicheDetailTab] = useState<'hot-posts' | 'pain-points'>('hot-posts')
@@ -976,10 +982,10 @@ export default function DashboardPage() {
     }
   }
 
-  const goToFeed = async (title: string) => {
+  const goToFeed = async (title: string, origin: 'news' | 'trend' = 'news') => {
     setActiveTab('prompt')
     setPromptSubTab('feed')
-    setFeedOrigin('news')
+    setFeedOrigin(origin)
     setFeedTopic(title)
     setFeedSnippet('')
     setFeedNotes('')
@@ -1001,6 +1007,8 @@ export default function DashboardPage() {
     setFeedAnalysis(null)
     setFeedTitleDir('')
     setFeedStyle('')
+    setFeedTitles([])
+    setFeedCustomTitle('')
     setFeedAnalysisLoading(true)
     setMode('feed-analyze')
     try {
@@ -1049,22 +1057,24 @@ export default function DashboardPage() {
           titleDir: feedTitleDir,
           style: feedStyle,
           hashtags: feedAnalysis?.hashtags || [],
-          genderRatio: feedAnalysis?.genderRatio || null,
-          ageRatio: feedAnalysis?.ageRatio || null,
+          genderRatio: includeAudienceInPrompt ? (feedAnalysis?.genderRatio || null) : null,
+          ageRatio: includeAudienceInPrompt ? (feedAnalysis?.ageRatio || null) : null,
+          contentType: feedContentType,
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setFeedError(data.error || '오류가 발생했습니다'); setMode('feed-analyze') }
+      if (!res.ok) { setFeedError(data.error || '오류가 발생했습니다'); setMode('feed-body') }
       else { setFeedPrompt(data.prompt); setMode('feed-result') }
     } catch {
       setFeedError('오류가 발생했습니다')
-      setMode('feed-analyze')
+      setMode('feed-body')
     }
   }
 
-  const goToWrite = (title: string, kws: string[]) => {
+  const goToWrite = (title: string, kws: string[], origin: 'trend' | null = null) => {
     setActiveTab('prompt')
     setPromptSubTab('search')
+    setWriteOrigin(origin)
     setTopic(title); setBrandName(''); setKeywords(kws.slice(0, 3)); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink('')
     setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setAutoSelectedKeyword('')
     setError(''); setPlaceError('')
@@ -1283,8 +1293,79 @@ export default function DashboardPage() {
 
   if (!mounted || loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">로딩 중...</div>
 
+  const renderFeedProgress = (step: number) => {
+    const steps = ['포화도', '제목', '본문', '완성']
+    return (
+      <div className="flex mb-2">
+        {steps.map((label, i) => {
+          const done = i + 1 < step
+          const active = i + 1 === step
+          return (
+            <div key={i} className="flex flex-1 last:flex-none items-start">
+              <div className="flex flex-col items-center gap-1 shrink-0 w-12">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${done || active ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                  {done ? '✓' : i + 1}
+                </div>
+                <span className={`text-[10px] font-medium text-center leading-tight transition-colors ${active ? 'text-blue-500' : done ? 'text-blue-300' : 'text-gray-300'}`}>{label}</span>
+              </div>
+              {i < 3 && <div className={`flex-1 h-0.5 mt-3.5 transition-colors ${done ? 'bg-blue-400' : 'bg-gray-100'}`} />}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white" onContextMenu={e => e.preventDefault()}>
+      {/* Pro 업그레이드 모달 */}
+      {showProModal && (() => {
+        const configs: Record<string, { title: string; desc: string; features: React.ReactNode[]; cta: string }> = {
+          trend: {
+            title: '트렌드 글감을 전부 확인하세요',
+            desc: '지금 이 순간 뜨는 글감을 경쟁자보다 먼저 잡아요',
+            features: [
+              <span>{'놓쳤던 '}<span className="font-bold">{'트렌드 글감'}</span>{'을 전부 볼 수 있어요'}</span>,
+              <span>{'상위노출 가능한 '}<span className="font-bold">{'키워드'}</span>{'를 자동으로 추천해드려요'}</span>,
+              <span>{'상위노출 '}<span className="font-bold">{'필수 항목'}</span>{'을 분석해드려요'}</span>,
+              <span>{'상위노출 확률을 높이는 '}<span className="font-bold">{'체크리스트'}</span>{'를 제공해드려요'}</span>,
+              <span>{'홈피드 노출에 최적화된 '}<span className="font-bold">{'콘텐츠'}</span>{'를 추천해드려요'}</span>,
+            ],
+            cta: '지금 글감 전체보기',
+          },
+        }
+        const cfg = configs[showProModal] ?? configs['trend']
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4" onClick={() => setShowProModal(null)}>
+            <div className="absolute inset-0 bg-black/40" />
+            <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-7" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowProModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+              <div className="text-center mb-6">
+                <span className="inline-block bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full mb-3">Pro</span>
+                <h2 className="text-xl font-bold mb-1">{cfg.title}</h2>
+                <p className="text-gray-400 text-sm">{cfg.desc}</p>
+              </div>
+              <ul className="space-y-3.5 mb-7">
+                {cfg.features.map((f, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-xs text-gray-700">
+                    <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => { setShowProModal(null); window.location.href = '/pricing' }}
+                className="w-full py-3 bg-blue-500 text-white font-semibold rounded-2xl hover:bg-blue-600 transition-colors text-sm flex items-center justify-center gap-1"
+              >
+                {cfg.cta} <ChevronRight className="w-4 h-4" />
+              </button>
+              <p className="text-center text-xs text-gray-400 mt-2.5">월 59,000원 · 연간 결제 시 월 47,200원 (20% 할인)</p>
+            </div>
+          </div>
+        )
+      })()}
       {/* Pro 전용 토스트 */}
       {proToast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-lg flex items-center gap-3 whitespace-nowrap">
@@ -1417,6 +1498,7 @@ export default function DashboardPage() {
             {activeTab === 'prompt' && (
               <>
                 <button onClick={() => { setPromptSubTab('search'); setMode('write-input') }} className={`py-3 text-sm transition-all ${promptSubTab === 'search' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>검색형</button>
+
                 <button onClick={() => { setPromptSubTab('feed'); setFeedOrigin('tab'); setMode('feed-input') }} className={`py-3 text-sm transition-all ${promptSubTab === 'feed' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>노출형</button>
               </>
             )}
@@ -1431,6 +1513,9 @@ export default function DashboardPage() {
           <div>
             {feedOrigin === 'news' && (
               <button onClick={() => { setActiveTab('content'); setActiveSubTab('news'); setMode('news-result') }} className="text-gray-400 text-sm hover:text-gray-600 mb-4 block">← 뒤로</button>
+            )}
+            {feedOrigin === 'trend' && (
+              <button onClick={() => { setActiveTab('content'); setActiveSubTab('trend'); setMode('trend-result') }} className="text-gray-400 text-sm hover:text-gray-600 mb-4 block">← 뒤로</button>
             )}
             <h2 className="text-xl font-bold mb-2 pl-2">홈피드 노출형 프롬프트 생성</h2>
             <p className="text-gray-400 text-sm mb-6 pl-2">홈피드 알고리즘에 최적화된 글쓰기 프롬프트를 만들어드려요</p>
@@ -1464,20 +1549,20 @@ export default function DashboardPage() {
         {mode === 'feed-analyze' && (
           <div className="space-y-4">
             <button onClick={() => setMode('feed-input')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            {renderFeedProgress(1)}
             <div className="pl-2">
-              <h2 className="text-xl font-bold">홈피드 분석</h2>
+              <h2 className="text-xl font-bold">콘텐츠 포화도</h2>
               <p className="text-sm text-gray-400 mt-1">주제: <span className="text-gray-700 font-medium">{feedTopic}</span></p>
             </div>
 
             {feedAnalysisLoading ? (
               <div className="space-y-4 animate-pulse">
-                {[80, 60, 100, 80].map((h, i) => (
+                {[100, 60].map((h, i) => (
                   <div key={i} className="bg-white rounded-2xl shadow-sm" style={{ height: h }} />
                 ))}
               </div>
             ) : (
               <>
-                {/* 블로그 글 현황 */}
                 {feedAnalysis?.blogCount != null && (
                   <div className="bg-white rounded-2xl p-5 shadow-sm">
                     <p className="text-xs font-semibold text-gray-800 mb-5 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> 콘텐츠 포화도</p>
@@ -1489,7 +1574,14 @@ export default function DashboardPage() {
                       </div>
                       {feedAnalysis.searchVolume?.total > 0 && (
                         <div className="flex-1 bg-gray-50 rounded-xl p-4 text-center">
-                          <p className="text-2xl font-bold text-purple-500">{feedAnalysis.searchVolume.total.toLocaleString()}</p>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <p className="text-2xl font-bold text-purple-500">{feedAnalysis.searchVolume.total.toLocaleString()}</p>
+                            {feedAnalysis.isTrending && (
+                              <span className="inline-flex items-center gap-0.5 bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded-full font-medium text-[10px] shrink-0">
+                                <Flame className="w-2.5 h-2.5" /> 트렌드
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-400 mt-1">월간 검색량</p>
                           <p className="text-xs text-gray-300 mt-0.5">PC {feedAnalysis.searchVolume.pc.toLocaleString()} · 모바일 {feedAnalysis.searchVolume.mobile.toLocaleString()}</p>
                         </div>
@@ -1499,17 +1591,8 @@ export default function DashboardPage() {
                       const bc = feedAnalysis.blogCount
                       const sv = feedAnalysis.searchVolume?.total || 0
                       const ratio = sv > 0 ? bc / sv : null
-                      const dot = ratio === null
-                        ? 'bg-gray-300'
-                        : ratio < 3 ? 'bg-green-400'
-                        : ratio < 8 ? 'bg-yellow-400'
-                        : ratio < 15 ? 'bg-orange-400'
-                        : 'bg-red-400'
-                      const msg = bc > 500000
-                        ? '경쟁이 치열한 주제예요. 차별화된 시각이 필요해요.'
-                        : bc > 100000
-                        ? '적당한 경쟁 수준이에요. 좋은 콘텐츠면 노출 가능해요.'
-                        : '경쟁이 낮아 홈피드 노출 가능성이 높아요.'
+                      const dot = ratio === null ? 'bg-gray-300' : ratio < 3 ? 'bg-green-400' : ratio < 8 ? 'bg-yellow-400' : ratio < 15 ? 'bg-orange-400' : 'bg-red-400'
+                      const msg = bc > 500000 ? '경쟁이 치열한 주제예요. 차별화된 시각이 필요해요.' : bc > 100000 ? '적당한 경쟁 수준이에요. 좋은 콘텐츠면 노출 가능해요.' : '경쟁이 낮아 노출 가능성이 높아요.'
                       return (
                         <p className="text-sm font-medium text-gray-700 text-center mt-4 flex items-center justify-center gap-1.5">
                           <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
@@ -1519,180 +1602,248 @@ export default function DashboardPage() {
                     })()}
                   </div>
                 )}
-
-                {/* 최신 뉴스 헤드라인 */}
-                {feedAnalysis?.newsHeadlines?.length > 0 && (
-                  <div className="bg-white rounded-2xl p-5 shadow-sm">
-                    <p className="text-xs font-semibold text-gray-800 mb-5 flex items-center gap-1.5">
-                      <Newspaper className="w-3.5 h-3.5" /> 지금 이 주제 뉴스
-                      {feedAnalysis?.articleBody && (
-                        <span className="ml-auto text-[10px] font-medium bg-green-50 text-green-600 px-2 py-0.5 rounded-full">기사 내용 자동 수집됨</span>
-                      )}
-                    </p>
-                    <ul className="space-y-6">
-                      {feedAnalysis.newsHeadlines.map((item: { title: string; link: string; pubDate: string }, i: number) => (
-                        <li key={i}>
-                          <a href={item.link} target="_blank" rel="noopener noreferrer"
-                            className="flex items-start gap-2 group">
-                            <span className="shrink-0 text-xs text-gray-300 mt-0.5 font-medium w-4">{i + 1}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-gray-700 group-hover:text-blue-500 leading-snug transition-colors line-clamp-2">{item.title}</p>
-                              {item.pubDate && <p className="text-xs text-gray-400 mt-0.5">{item.pubDate}</p>}
-                            </div>
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-5 flex flex-col items-center">
-                      <button
-                        onClick={() => feedAnalysis?.articleBody && setArticleBodyExpanded(p => !p)}
-                        className={`transition-colors ${feedAnalysis?.articleBody ? 'text-gray-300 hover:text-gray-400 cursor-pointer' : 'text-gray-200 cursor-default'}`}
-                      >
-                        <ChevronRight className={`w-4 h-4 transition-transform ${articleBodyExpanded ? '-rotate-90' : 'rotate-90'}`} />
-                      </button>
-                      {articleBodyExpanded && feedAnalysis?.articleBody && (
-                        <div className="w-full mt-2">
-                          <div className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3 leading-relaxed max-h-44 overflow-y-auto">
-                            {feedAnalysis.articleBody}
-                          </div>
-                          <div className="flex justify-end mt-2">
-                            <button onClick={() => setIncludeArticleInPrompt(p => !p)}
-                              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${includeArticleInPrompt ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
-                              {includeArticleInPrompt ? '프롬프트에 포함 중' : '프롬프트에서 제외됨'}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 타겟 독자 */}
-                {feedAnalysis?.genderRatio && (feedAnalysis.genderRatio.male > 0 || feedAnalysis.genderRatio.female > 0) && (
-                  <div className="bg-white rounded-2xl p-5 shadow-sm space-y-5">
-                    <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5" /> 이 주제를 찾는 사람</p>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-4">성별 분포</p>
-                      <div className="flex h-10 rounded-xl overflow-hidden">
-                        <div className="flex items-center justify-center bg-pink-400 text-white text-xs font-bold gap-1"
-                          style={{ width: `${feedAnalysis.genderRatio.female}%` }}>
-                          여성 {feedAnalysis.genderRatio.female}%
-                        </div>
-                        <div className="flex items-center justify-center bg-blue-400 text-white text-xs font-bold gap-1"
-                          style={{ width: `${feedAnalysis.genderRatio.male}%` }}>
-                          남성 {feedAnalysis.genderRatio.male}%
-                        </div>
-                      </div>
-                    </div>
-                    {feedAnalysis?.ageRatio && (feedAnalysis.ageRatio.twenty > 0 || feedAnalysis.ageRatio.thirty > 0 || feedAnalysis.ageRatio.forty > 0) && (
-                      <div>
-                        <p className="text-xs text-gray-500 mb-4">연령 분포</p>
-                        <div className="space-y-2.5">
-                          {[
-                            { label: '10대', value: feedAnalysis.ageRatio.teen },
-                            { label: '20대', value: feedAnalysis.ageRatio.twenty },
-                            { label: '30대', value: feedAnalysis.ageRatio.thirty },
-                            { label: '40대', value: feedAnalysis.ageRatio.forty },
-                            { label: '50대+', value: feedAnalysis.ageRatio.fifty },
-                          ].map((item) => (
-                            <div key={item.label} className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500 w-9 shrink-0">{item.label}</span>
-                              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-400 rounded-full transition-all" style={{ width: `${item.value}%` }} />
-                              </div>
-                              <span className="text-xs font-bold text-blue-500 w-7 text-right">{item.value}%</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* 제목 방향 선택 */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <p className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> 제목 스타일</p>
-                  <p className="text-xs text-gray-400 mb-5">추천값이 선택돼 있어요. 변경할 수 있어요.</p>
-                  <div className="flex gap-2">
-                    {[
-                      { key: '감성형', desc: '감정을 자극하는 따뜻하고 공감되는 제목' },
-                      { key: '궁금증형', desc: '클릭하지 않으면 궁금한 정보를 숨기는 제목' },
-                      { key: '공감형', desc: '내 이야기인 것 같은 느낌을 주는 제목' },
-                    ].map(({ key, desc }) => (
-                      <button key={key} onClick={() => setFeedTitleDir(key)}
-                        className={`flex-1 py-2.5 px-2 rounded-xl text-sm font-medium transition-all group relative ${feedTitleDir === key ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                        {feedTitleDir === key && (
-                          <span className="absolute top-1.5 right-1.5 text-[10px] font-bold bg-white text-blue-500 px-1.5 py-0.5 rounded-full shadow-sm border border-blue-100">추천</span>
-                        )}
-                        <span className="block">{key}</span>
-                        <span className={`block text-xs font-normal mt-1 leading-snug ${feedTitleDir === key ? 'text-blue-100' : 'text-gray-400 opacity-0 group-hover:opacity-100'} transition-opacity`}>
-                          {desc}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 글 스타일 선택 */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <p className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><PenLine className="w-3.5 h-3.5" /> 글 스타일</p>
-                  <p className="text-xs text-gray-400 mb-5">추천값이 선택돼 있어요. 변경할 수 있어요.</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { key: '스토리텔링', desc: '경험을 이야기로 풀어내는 방식' },
-                      { key: '정보+공감', desc: '유용한 정보에 내 생각을 더하는 방식' },
-                      { key: '솔직한 의견', desc: '직접적이고 솔직한 내 시각 중심' },
-                      { key: '유머+경험', desc: '가볍고 재밌게 경험을 전달하는 방식' },
-                    ].map(({ key, desc }) => (
-                      <button key={key} onClick={() => setFeedStyle(key)}
-                        className={`p-3 rounded-xl text-left transition-all group relative ${feedStyle === key ? 'bg-blue-50 border-2 border-blue-400' : 'bg-gray-50 border-2 border-transparent hover:border-gray-200'}`}>
-                        {feedStyle === key && (
-                          <span className="absolute top-1.5 right-1.5 text-[10px] font-bold bg-white text-blue-500 px-1.5 py-0.5 rounded-full shadow-sm border border-blue-100">추천</span>
-                        )}
-                        <p className={`text-sm font-semibold mb-0.5 ${feedStyle === key ? 'text-blue-600' : 'text-gray-700'}`}>{key}</p>
-                        <p className={`text-xs leading-snug ${feedStyle === key ? 'text-blue-400' : 'text-gray-400 opacity-0 group-hover:opacity-100'} transition-opacity`}>{desc}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 추천 해시태그 */}
-                {feedAnalysis?.hashtags?.length > 0 && (
-                  <div className="bg-white rounded-2xl p-5 shadow-sm">
-                    <p className="text-xs font-semibold text-gray-800 mb-5 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> 추천 해시태그</p>
-                    <div className="flex flex-wrap gap-2">
-                      {feedAnalysis.hashtags.map((tag: string, i: number) => (
-                        <span key={i} className={`text-xs px-3 py-1 rounded-full font-medium ${i < 3 ? 'bg-purple-500 text-white' : i < 7 ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 다루고 싶은 내용 */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <p className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><PenLine className="w-3.5 h-3.5" /> 더 담고 싶은 내용</p>
-                  <p className="text-xs text-gray-400 mb-4">내 시각·경험·의견을 적으면 더 개성 있는 프롬프트가 만들어져요</p>
-                  <textarea
-                    value={feedNotes}
-                    onChange={e => setFeedNotes(e.target.value)}
-                    rows={4}
-                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300"
-                    placeholder={`예:\n이 주제에 대한 나의 직접 경험\n가장 강조하고 싶은 포인트\n독자에게 전하고 싶은 메시지`}
-                  />
-                </div>
-
-                {feedError && <p className="text-sm text-red-400 pl-1">{feedError}</p>}
-
                 <div className="sticky bottom-4 z-10">
-                  <button onClick={generateFeedPrompt}
+                  <button onClick={() => { setMode('feed-title'); window.scrollTo({ top: 0 }) }}
                     className="w-full py-3 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 shadow-lg transition-colors">
-                    <span className="flex items-center justify-center gap-1">프롬프트 생성 <ChevronRight className="w-4 h-4" /></span>
+                    <span className="flex items-center justify-center gap-1">글쓰기 시작 <ChevronRight className="w-4 h-4" /></span>
                   </button>
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* ── feed-title ── */}
+        {mode === 'feed-title' && (
+          <div className="space-y-4">
+            <button onClick={() => { setMode('feed-analyze'); window.scrollTo({ top: 0 }) }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            {renderFeedProgress(2)}
+            <div className="pl-2">
+              <h2 className="text-xl font-bold">제목 만들기</h2>
+              <p className="text-sm text-gray-400 mt-1">주제: <span className="text-gray-700 font-medium">{feedTopic}</span></p>
+            </div>
+
+            {/* 뉴스 헤드라인 */}
+            {feedAnalysis?.newsHeadlines?.length > 0 && (
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <p className="text-xs font-semibold text-gray-800 mb-4 flex items-center gap-1.5"><Newspaper className="w-3.5 h-3.5" /> 지금 이 주제 뉴스</p>
+                <ul>
+                  {feedAnalysis.newsHeadlines.map((item: { title: string; link: string; pubDate: string }, i: number) => (
+                    <li key={i}>
+                      {i > 0 && <div className="mx-3 h-px bg-gray-100 my-4" />}
+                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 group">
+                        <span className="shrink-0 text-xs text-gray-300 mt-0.5 font-medium w-4">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-700 group-hover:text-blue-500 leading-snug transition-colors line-clamp-2">{item.title}</p>
+                          {item.pubDate && <p className="text-xs text-gray-400 mt-0.5">{item.pubDate}</p>}
+                        </div>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* 제목 스타일 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <p className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> 제목 스타일</p>
+              <p className="text-xs text-gray-400 mb-5">추천값이 선택돼 있어요. 변경할 수 있어요.</p>
+              <div className="flex gap-2">
+                {[
+                  { key: '감성형', desc: '감정을 자극하는 따뜻하고 공감되는 제목' },
+                  { key: '궁금증형', desc: '클릭하지 않으면 궁금한 정보를 숨기는 제목' },
+                  { key: '공감형', desc: '내 이야기인 것 같은 느낌을 주는 제목' },
+                ].map(({ key, desc }) => (
+                  <button key={key} onClick={() => setFeedTitleDir(key)}
+                    className={`flex-1 py-2.5 px-2 rounded-xl text-sm font-medium transition-all group relative ${feedTitleDir === key ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    {feedTitleDir === key && (
+                      <span className="absolute top-1.5 right-1.5 text-[10px] font-bold bg-white text-blue-500 px-1.5 py-0.5 rounded-full shadow-sm border border-blue-100">추천</span>
+                    )}
+                    <span className="block">{key}</span>
+                    <span className={`block text-xs font-normal mt-1 leading-snug ${feedTitleDir === key ? 'text-blue-100' : 'text-gray-400 opacity-0 group-hover:opacity-100'} transition-opacity`}>{desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="sticky bottom-4 z-10">
+              <button onClick={() => { setMode('feed-body'); window.scrollTo({ top: 0 }) }}
+                className="w-full py-3 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 shadow-lg transition-colors">
+                <span className="flex items-center justify-center gap-1">다음 <ChevronRight className="w-4 h-4" /></span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── feed-body ── */}
+        {mode === 'feed-body' && (
+          <div className="space-y-4">
+            <button onClick={() => { setMode('feed-title'); window.scrollTo({ top: 0 }) }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            {renderFeedProgress(3)}
+            <div className="pl-2">
+              <h2 className="text-xl font-bold">본문 만들기</h2>
+              <p className="text-sm text-gray-400 mt-1">주제: <span className="text-gray-700 font-medium">{feedTopic}</span></p>
+            </div>
+
+            {/* 뉴스 풀버전 */}
+            {feedAnalysis?.newsHeadlines?.length > 0 && (
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <p className="text-xs font-semibold text-gray-800 mb-4 flex items-center gap-1.5">
+                  <Newspaper className="w-3.5 h-3.5" /> 참고 기사
+                  {feedAnalysis?.articleBody && (
+                    <span className="ml-auto text-[10px] font-medium bg-green-50 text-green-600 px-2 py-0.5 rounded-full">기사 내용 자동 수집됨</span>
+                  )}
+                </p>
+                <ul>
+                  {feedAnalysis.newsHeadlines.map((item: { title: string; link: string; pubDate: string }, i: number) => (
+                    <li key={i}>
+                      {i > 0 && <div className="mx-3 h-px bg-gray-100 my-4" />}
+                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 group">
+                        <span className="shrink-0 text-xs text-gray-300 mt-0.5 font-medium w-4">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-700 group-hover:text-blue-500 leading-snug transition-colors line-clamp-2">{item.title}</p>
+                          {item.pubDate && <p className="text-xs text-gray-400 mt-0.5">{item.pubDate}</p>}
+                        </div>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+                {feedAnalysis?.articleBody && (
+                  <div className="mt-5 flex flex-col items-center">
+                    <button onClick={() => setArticleBodyExpanded(p => !p)} className="text-gray-300 hover:text-gray-400 cursor-pointer transition-colors">
+                      <ChevronRight className={`w-4 h-4 transition-transform ${articleBodyExpanded ? '-rotate-90' : 'rotate-90'}`} />
+                    </button>
+                    {articleBodyExpanded && (
+                      <div className="w-full mt-2">
+                        <div className="flex items-center justify-end gap-2 mb-2">
+                          <span className="text-xs text-gray-400">프롬프트에 포함</span>
+                          <button onClick={() => setIncludeArticleInPrompt(p => !p)}
+                            className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${includeArticleInPrompt ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                            <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${includeArticleInPrompt ? 'translate-x-4' : 'translate-x-0'}`} />
+                          </button>
+                        </div>
+                        <div className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3 leading-relaxed max-h-64 overflow-y-auto">{feedAnalysis.articleBody}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 독자 힌트 */}
+            {feedAnalysis?.genderRatio && (feedAnalysis.genderRatio.male > 0 || feedAnalysis.genderRatio.female > 0) && (() => {
+              const gr = feedAnalysis.genderRatio
+              const ar = feedAnalysis.ageRatio
+              const genderLabel = gr.female >= 60 ? `여성 위주 (${gr.female}%)` : gr.male >= 60 ? `남성 위주 (${gr.male}%)` : '남녀 고른 분포'
+              const ageLabel = ar ? (() => {
+                const ages = [
+                  { label: '10대', v: ar.teen }, { label: '20대', v: ar.twenty },
+                  { label: '30대', v: ar.thirty }, { label: '40대', v: ar.forty },
+                  { label: '50대', v: ar.fifty }, { label: '60대+', v: ar.sixty },
+                ]
+                const top = [...ages].sort((a, b) => b.v - a.v)[0]
+                return top && top.v > 0 ? `${top.label} 중심` : ''
+              })() : ''
+              const hint = gr.female >= 60 ? '감성적이고 공감되는 언어로 쓰면 반응이 좋아요' : gr.male >= 60 ? '정보 중심의 명확한 내용이 효과적이에요' : '다양한 독자층이 공감할 수 있는 균형 잡힌 내용을 담아보세요'
+              return (
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5" /> 이 주제를 찾는 독자</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">프롬프트에 포함</span>
+                      <button onClick={() => setIncludeAudienceInPrompt(p => !p)}
+                        className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${includeAudienceInPrompt ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${includeAudienceInPrompt ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">{genderLabel}</span>
+                    {ageLabel && <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full">{ageLabel}</span>}
+                  </div>
+                  <p className="text-xs text-gray-500 leading-relaxed">→ {hint}</p>
+                  <p className="text-xs text-gray-300 mt-2">데이터 기반 추정값이라 실제 독자층과 다를 수 있어요. 방향 참고용으로 활용하세요!</p>
+                </div>
+              )
+            })()}
+
+            {/* 글 스타일 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <p className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><PenLine className="w-3.5 h-3.5" /> 글 스타일</p>
+              <p className="text-xs text-gray-400 mb-5">추천값이 선택돼 있어요. 변경할 수 있어요.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { key: '스토리텔링', desc: '경험을 이야기로 풀어내는 방식' },
+                  { key: '정보+공감', desc: '유용한 정보에 내 생각을 더하는 방식' },
+                  { key: '솔직한 의견', desc: '직접적이고 솔직한 내 시각 중심' },
+                  { key: '유머+경험', desc: '가볍고 재밌게 경험을 전달하는 방식' },
+                ].map(({ key, desc }) => (
+                  <button key={key} onClick={() => setFeedStyle(key)}
+                    className={`p-3 rounded-xl text-left transition-all group relative ${feedStyle === key ? 'bg-blue-50 border-2 border-blue-400' : 'bg-gray-50 border-2 border-transparent hover:border-gray-200'}`}>
+                    {feedStyle === key && (
+                      <span className="absolute top-1.5 right-1.5 text-[10px] font-bold bg-white text-blue-500 px-1.5 py-0.5 rounded-full shadow-sm border border-blue-100">추천</span>
+                    )}
+                    <p className={`text-sm font-semibold mb-0.5 ${feedStyle === key ? 'text-blue-600' : 'text-gray-700'}`}>{key}</p>
+                    <p className={`text-xs leading-snug ${feedStyle === key ? 'text-blue-400' : 'text-gray-400 opacity-0 group-hover:opacity-100'} transition-opacity`}>{desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 콘텐츠 유형 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <p className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> 콘텐츠 유형</p>
+              <p className="text-xs text-gray-400 mb-4">포스팅에 이미지가 많은지 텍스트 중심인지 선택하세요</p>
+              <div className="flex gap-2">
+                {([
+                  { key: 'image' as const, label: '이미지 위주', desc: '사진 중심 · 400~600자' },
+                  { key: 'text' as const, label: '텍스트 위주', desc: '글 중심 · 600~1000자' },
+                ]).map(({ key, label, desc }) => (
+                  <button key={key} onClick={() => setFeedContentType(key)}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-all group relative ${feedContentType === key ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    {feedContentType === key && (
+                      <span className="absolute top-1.5 right-1.5 text-[10px] font-bold bg-white text-blue-500 px-1.5 py-0.5 rounded-full shadow-sm border border-blue-100">선택</span>
+                    )}
+                    <span className="block">{label}</span>
+                    <span className={`block text-xs font-normal mt-1 ${feedContentType === key ? 'text-blue-100' : 'text-gray-400'}`}>{desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 해시태그 */}
+            {feedAnalysis?.hashtags?.length > 0 && (
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> 추천 해시태그</p>
+                <div className="flex flex-wrap gap-2">
+                  {feedAnalysis.hashtags.map((tag: string, i: number) => (
+                    <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium bg-purple-50 text-purple-600 border border-purple-100">#{tag}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 메모 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <p className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1.5"><PenLine className="w-3.5 h-3.5" /> 더 담고 싶은 내용</p>
+              <p className="text-xs text-gray-400 mb-4">내 시각·경험·의견을 적으면 더 개성 있는 프롬프트가 만들어져요</p>
+              <textarea
+                value={feedNotes}
+                onChange={e => setFeedNotes(e.target.value)}
+                rows={7}
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 resize-none placeholder:text-gray-300"
+                placeholder={`예:\n이 주제에 대한 나의 직접 경험\n가장 강조하고 싶은 포인트\n독자에게 전하고 싶은 메시지`}
+              />
+            </div>
+
+            {feedError && <p className="text-sm text-red-400 pl-1">{feedError}</p>}
+
+            <div className="sticky bottom-4 z-10">
+              <button onClick={generateFeedPrompt}
+                className="w-full py-3 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 shadow-lg transition-colors">
+                <span className="flex items-center justify-center gap-1">프롬프트 생성 <ChevronRight className="w-4 h-4" /></span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -1713,7 +1864,8 @@ export default function DashboardPage() {
         {/* ── feed-result ── */}
         {mode === 'feed-result' && feedPrompt && (
           <div className="space-y-4">
-            <button onClick={() => setMode('feed-analyze')} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            <button onClick={() => { setMode('feed-body'); window.scrollTo({ top: 0 }) }} className="text-gray-400 text-sm hover:text-gray-600">← 뒤로</button>
+            {renderFeedProgress(4)}
             <h2 className="text-xl font-bold pl-2">노출형 프롬프트</h2>
             <p className="text-gray-400 text-sm -mt-2 pl-2">아래 프롬프트를 복사해서 Claude나 ChatGPT에 붙여넣으세요</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm relative">
@@ -1730,6 +1882,9 @@ export default function DashboardPage() {
         {/* ── write-input ── */}
         {mode === 'write-input' && (
           <div>
+            {writeOrigin === 'trend' && (
+              <button onClick={() => { setActiveTab('content'); setActiveSubTab('trend'); setMode('trend-result'); setWriteOrigin(null) }} className="text-gray-400 text-sm hover:text-gray-600 mb-4 block">← 뒤로</button>
+            )}
             <h2 className="text-xl font-bold mb-2 pl-2">검색형 상위노출 프롬프트 생성</h2>
             <p className="text-gray-400 text-sm mb-6 pl-2">키워드를 입력하면 상위노출 패턴을 분석하고 프롬프트를 만들어드려요</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
@@ -1744,7 +1899,7 @@ export default function DashboardPage() {
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                         postType === val
                           ? 'bg-blue-500 text-white border-blue-500'
-                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
                       }`}
                     >
                       {label}
@@ -2039,14 +2194,16 @@ export default function DashboardPage() {
                     </button>
                   )}
                 </div>
-                <div className={`flex flex-wrap gap-2 min-h-[120px] ${!isPro ? 'select-none pointer-events-none' : ''}`}>
+                <div className={`flex flex-wrap gap-2 min-h-[140px] ${!isPro ? 'select-none pointer-events-none' : ''}`}>
                   {analysis.topHashtags.map((h, i) => (
                     <span key={i} onClick={() => isPro && copySingleTag(h.tag)}
-                      className={`text-xs px-3 py-1 rounded-full font-medium cursor-pointer transition-opacity hover:opacity-80 ${
-                        i < 3 ? 'bg-purple-500 text-white' :
-                        i < 8 ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-500'
-                      }`}>
+                      className="text-xs px-2.5 py-1 rounded-full font-medium cursor-pointer transition-opacity hover:opacity-80 bg-purple-50 text-purple-600 border border-purple-100">
                       #{h.tag}{h.count > 1 && <span className="opacity-70 ml-1">({h.count})</span>}
+                    </span>
+                  ))}
+                  {!isPro && ['일상', '블로그', '정보공유', '추천', '꿀팁', '생활정보', '리뷰', '후기', '소통', '맞팔'].map((t, i) => (
+                    <span key={`dummy-${i}`} className="text-xs px-2.5 py-1 rounded-full font-medium bg-purple-50 text-purple-600 border border-purple-100">
+                      #{t}
                     </span>
                   ))}
                 </div>
@@ -2144,6 +2301,26 @@ export default function DashboardPage() {
                           </li>
                         ))}
                       </ul>
+                    </div>
+                  )}
+                  {!isPro && (
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-xs text-gray-500 font-medium mb-2">키워드 전략</p>
+                        <ul className="space-y-1.5">
+                          {['메인 키워드는 제목 앞 10자 이내 배치 권장', '서브 키워드 2~3개 본문 자연스럽게 분산', '키워드 밀도 2~4‰ 유지 (과최적화 주의)'].map((t, i) => (
+                            <li key={i} className="flex gap-2 text-sm text-gray-700"><span className="text-blue-400 shrink-0">•</span><span>{t}</span></li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 font-medium mb-2">체류시간 전략</p>
+                        <ul className="space-y-1.5">
+                          {['인트로 첫 문장에 핵심 정보 배치 — 이탈 방지', '소제목으로 구간 나눠 스크롤 유도', '마무리에 관련 키워드 자연스럽게 언급'].map((t, i) => (
+                            <li key={i} className="flex gap-2 text-sm text-gray-700"><span className="text-blue-400 shrink-0">•</span><span>{t}</span></li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2667,10 +2844,10 @@ export default function DashboardPage() {
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center">
                   <span className="flex-1 text-xs font-medium text-gray-400 text-center">트렌드·이슈</span>
-                  <span className="shrink-0 w-28 text-xs font-medium text-gray-400 text-center">글쓰기</span>
+                  <span className="shrink-0 w-36 text-xs font-medium text-gray-400 text-center">글쓰기</span>
                 </div>
                 <ul className="divide-y divide-gray-50">
-                  {issueTitles.map((title, i) => (
+                  {(isPro ? issueTitles : issueTitles.slice(0, 8)).map((title, i) => (
                     <li key={i} className="hover:bg-gray-50 transition-colors">
                       <div className="px-4 py-3 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2 min-w-0">
@@ -2678,13 +2855,41 @@ export default function DashboardPage() {
                           <span className="text-sm text-gray-700 leading-snug">{title}</span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <button onClick={() => goToWrite(title, [])} className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-0.5">검색형 <ChevronRight className="w-3 h-3" /></button>
-                          <button onClick={() => goToFeed(title)} className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center gap-0.5">노출형 <ChevronRight className="w-3 h-3" /></button>
+                          <button onClick={() => goToWrite(title, [], 'trend')} className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-0.5">검색형 <ChevronRight className="w-3 h-3" /></button>
+                          <button onClick={() => goToFeed(title, 'trend')} className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center gap-0.5">노출형 <ChevronRight className="w-3 h-3" /></button>
                         </div>
                       </div>
                     </li>
                   ))}
                 </ul>
+                {!isPro && issueTitles.length > 8 && (
+                  <div className="relative">
+                    <ul className="divide-y divide-gray-50 select-none pointer-events-none">
+                      {issueTitles.slice(8, 14).map((title, i) => (
+                        <li key={i}>
+                          <div className="px-4 py-3 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 9).padStart(2, '0')}</span>
+                              <span className="text-sm text-gray-700 leading-snug">{title}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-xs px-3 py-1.5 rounded-lg font-medium bg-blue-50 text-blue-600 flex items-center gap-0.5">검색형 <ChevronRight className="w-3 h-3" /></span>
+                              <span className="text-xs px-3 py-1.5 rounded-lg font-medium bg-orange-50 text-orange-600 flex items-center gap-0.5">노출형 <ChevronRight className="w-3 h-3" /></span>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent from-0% via-white/90 via-20% to-white flex flex-col items-center justify-center gap-2 rounded-b-2xl">
+                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      </div>
+                      <p className="text-sm font-bold text-gray-700">Pro 전용</p>
+                      <p className="text-xs text-gray-500">Pro 유저는 훨씬 더 많은 상위노출 글감을 쓰고 있어요</p>
+                      <button onClick={() => setShowProModal('trend')} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-xl hover:bg-blue-600">Pro 업그레이드</button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : !issueError && (
               <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">

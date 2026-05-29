@@ -44,7 +44,31 @@ function avgRatio(data: any[] | undefined | null): number {
 }
 
 function stripHtml(str: string): string {
-  return str.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+  return str
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#x27;/g, "'")
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+    .replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"')
+    .replace(/&lsquo;/g, "'").replace(/&rsquo;/g, "'")
+    .replace(/&hellip;/g, '…').replace(/&middot;/g, '·')
+    .replace(/&#\d+;/g, '').replace(/&[a-z]+;/g, '')
+}
+
+function cleanArticleText(text: string): string {
+  return text
+    .replace(/\[[^\]]{0,30}[ㅣ|│]?[^\]]{0,20}기자[^\]]{0,10}\]/g, '')  // [더팩트ㅣ홍길동 기자]
+    .replace(/\([^)]{0,20}기자[^)]{0,10}\)/g, '')                        // (홍길동 기자)
+    .replace(/[가-힣a-zA-Z\s]{1,15}\s*기자\s*[=◆▶]/g, '')               // 홍길동 기자 =
+    .replace(/^[가-힣a-zA-Z\s]{1,15}\s*기자/gm, '')                      // 줄 시작 "홍길동 기자"
+    .replace(/[가-힣a-zA-Z\s]{1,15}\s*기자$/gm, '')                      // 줄 끝 "홍길동 기자"
+    .replace(/ⓒ[^\n]*/g, '')                                             // ⓒ 저작권 표시
+    .replace(/©[^\n]*/g, '')
+    .replace(/무단\s*전재[^\n]*/g, '')
+    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 }
 
 function extractDicArea(html: string): string {
@@ -163,7 +187,8 @@ async function crawlArticle(url: string): Promise<string> {
     })
     if (!res.ok) return ''
     const html = await res.text()
-    return (extractDicArea(html) || extractByClass(html, 'newsct_article _article_body') || extractByClass(html, 'go_trans _article_content') || extractParagraphs(html)).slice(0, 1500)
+    const raw = extractDicArea(html) || extractByClass(html, 'newsct_article _article_body') || extractByClass(html, 'go_trans _article_content') || extractParagraphs(html)
+    return cleanArticleText(raw).slice(0, 1500)
   } catch {
     return ''
   }
@@ -195,14 +220,15 @@ export async function POST(request: NextRequest) {
     keywordGroups: [{ groupName: topic, keywords }],
   }
 
-  const [male, female, teen, twenty, thirty, forty, fifty, newsRes, blogRes, adRes] = await Promise.all([
+  const [male, female, teen, twenty, thirty, forty, fifty, sixty, newsRes, blogRes, adRes] = await Promise.all([
     datalabCall({ ...base, gender: 'm' }),
     datalabCall({ ...base, gender: 'f' }),
-    datalabCall({ ...base, ages: ['2'] }),             // 10대
-    datalabCall({ ...base, ages: ['3', '4'] }),        // 20대
-    datalabCall({ ...base, ages: ['5', '6'] }),        // 30대
-    datalabCall({ ...base, ages: ['7', '8'] }),        // 40대
-    datalabCall({ ...base, ages: ['9', '10', '11'] }), // 50대+
+    datalabCall({ ...base, ages: ['2'] }),        // 10대 (13~18)
+    datalabCall({ ...base, ages: ['3', '4'] }),   // 20대 (19~29)
+    datalabCall({ ...base, ages: ['5', '6'] }),   // 30대 (30~39)
+    datalabCall({ ...base, ages: ['7', '8'] }),   // 40대 (40~49)
+    datalabCall({ ...base, ages: ['9', '10'] }),  // 50대 (50~59)
+    datalabCall({ ...base, ages: ['11'] }),        // 60대+ (60~)
     naverSearch('news', topic, 5),
     naverSearch('blog', keywords.join(' '), 1),
     queryKeywords(keywords).catch(() => [] as any[]),
@@ -217,19 +243,21 @@ export async function POST(request: NextRequest) {
     female: Math.round((femaleAvg / genderTotal) * 100),
   }
 
-  // 연령 분포 (10대~50대+)
+  // 연령 분포 (10대~60대+)
   const teenAvg = avgRatio(teen?.results?.[0]?.data)
   const twentyAvg = avgRatio(twenty?.results?.[0]?.data)
   const thirtyAvg = avgRatio(thirty?.results?.[0]?.data)
   const fortyAvg = avgRatio(forty?.results?.[0]?.data)
   const fiftyAvg = avgRatio(fifty?.results?.[0]?.data)
-  const ageTotal = teenAvg + twentyAvg + thirtyAvg + fortyAvg + fiftyAvg || 1
+  const sixtyAvg = avgRatio(sixty?.results?.[0]?.data)
+  const ageTotal = teenAvg + twentyAvg + thirtyAvg + fortyAvg + fiftyAvg + sixtyAvg || 1
   const ageRatio = {
     teen: Math.round((teenAvg / ageTotal) * 100),
     twenty: Math.round((twentyAvg / ageTotal) * 100),
     thirty: Math.round((thirtyAvg / ageTotal) * 100),
     forty: Math.round((fortyAvg / ageTotal) * 100),
     fifty: Math.round((fiftyAvg / ageTotal) * 100),
+    sixty: Math.round((sixtyAvg / ageTotal) * 100),
   }
 
   // 최신 뉴스 헤드라인
@@ -267,6 +295,17 @@ export async function POST(request: NextRequest) {
   }
   const searchVolume = { pc: pcVolume, mobile: mobileVolume, total: pcVolume + mobileVolume }
 
+  // 트렌드 감지 (최근 7일 vs 이전 7일, 30% 이상 상승)
+  function computeTrend(data: any[] | undefined | null): boolean {
+    if (!data || data.length < 14) return false
+    const sorted = [...data].sort((a, b) => (a.period || '').localeCompare(b.period || ''))
+    const last7Avg = sorted.slice(-7).reduce((s, d) => s + (d.ratio || 0), 0) / 7
+    const prev7Avg = sorted.slice(-14, -7).reduce((s, d) => s + (d.ratio || 0), 0) / 7
+    if (prev7Avg === 0) return last7Avg > 0
+    return (last7Avg - prev7Avg) / prev7Avg >= 0.3
+  }
+  const isTrending = computeTrend(male?.results?.[0]?.data) || computeTrend(female?.results?.[0]?.data)
+
   // 해시태그
   const allWords = topic.split(/\s+/).filter((w: string) => w.length > 1)
   const common = ['일상', '블로그', '정보', '이슈', '추천']
@@ -285,6 +324,7 @@ export async function POST(request: NextRequest) {
     newsHeadlines,
     blogCount,
     searchVolume,
+    isTrending,
     hashtags,
     articleBody,
   })

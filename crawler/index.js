@@ -732,7 +732,7 @@ app.get('/shortents', async (req, res) => {
         }
       }
 
-      return deduped.slice(0, 10)
+      return deduped.slice(0, 30)
     })
 
     await context.close()
