@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useRef, Suspense } from 'react'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { BarChart2, Trophy, TrendingUp, Newspaper, Key, Tag, FileText, Smartphone, Link2, Hash, Lightbulb, PenLine, Copy, Flame, RefreshCw, Zap, Search, Calendar, Pencil, Plane, Shirt, Sparkles, Utensils, Monitor, Car, Home, Baby, Heart, Gamepad2, PawPrint, Dumbbell, Tv, Film, BookOpen, Briefcase, GraduationCap, Gem, User, LogOut, ChevronRight, Info, Circle, Check, type LucideIcon } from 'lucide-react'
+import { BarChart2, Trophy, TrendingUp, Newspaper, Key, Tag, FileText, Smartphone, Link2, Hash, Lightbulb, PenLine, Copy, Flame, RefreshCw, Zap, Search, Calendar, Pencil, Plane, Shirt, Sparkles, Utensils, Monitor, Car, Home, Baby, Heart, Gamepad2, PawPrint, Dumbbell, Tv, Film, BookOpen, Briefcase, GraduationCap, Gem, User, LogOut, LogIn, ChevronRight, ChevronsDown, Info, Circle, Check, type LucideIcon } from 'lucide-react'
+
 
 const WordCloud = dynamic(() => import('react-d3-cloud'), { ssr: false })
 
@@ -588,6 +590,8 @@ function DashboardPageInner() {
   const [mode, setMode] = useState<'write-input' | 'analyzing' | 'pattern-preview' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'golden-guide' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result' | 'feed-input' | 'feed-analyze' | 'feed-title' | 'feed-body' | 'feed-loading' | 'feed-result' | 'search-trend-category' | 'search-trend-loading' | 'search-trend-result' | 'niche-home' | 'niche-detail'>('keyword-insight-input')
   const [activeTab, setActiveTab] = useState<'keyword' | 'content' | 'prompt' | 'niche'>('keyword')
   const [showOnboarding, setShowOnboarding] = useState(true)
+  const [typedSubtitle, setTypedSubtitle] = useState('')
+  const [scrolled, setScrolled] = useState(false)
   const [activeSubTab, setActiveSubTab] = useState<'insight' | 'golden' | 'trend' | 'news' | 'search-trend'>('insight')
   const [promptSubTab, setPromptSubTab] = useState<'search' | 'feed'>('search')
   const [writeMode, setWriteMode] = useState<'search' | 'feed'>('search')
@@ -693,6 +697,7 @@ function DashboardPageInner() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [hoveredTab, setHoveredTab] = useState<'keyword' | 'content' | 'prompt' | 'niche' | null>(null)
 
   const requireLogin = (): boolean => {
     if (user) return true
@@ -768,6 +773,35 @@ function DashboardPageInner() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (!showOnboarding) return
+    const text = '분석부터 글쓰기까지, 상위노출 한 번에 해결!'
+    setTypedSubtitle('')
+    let i = 0
+    let direction: 'forward' | 'backward' = 'forward'
+    let waiting = 0
+    const interval = setInterval(() => {
+      if (waiting > 0) { waiting--; return }
+      if (direction === 'forward') {
+        i++
+        setTypedSubtitle(text.slice(0, i))
+        if (i >= text.length) { direction = 'backward'; waiting = 30 }
+      } else {
+        i--
+        setTypedSubtitle(text.slice(0, i))
+        if (i <= 0) { direction = 'forward'; waiting = 8 }
+      }
+    }, 60)
+    return () => clearInterval(interval)
+  }, [showOnboarding])
+
+  useEffect(() => {
+    if (!showOnboarding) return
+    const onScroll = () => setScrolled(window.scrollY > 30)
+    window.addEventListener('scroll', onScroll)
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [showOnboarding])
 
   const resetAll = () => {
     setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink(''); setPostType('')
@@ -1484,6 +1518,8 @@ function DashboardPageInner() {
           <p><span className="font-semibold text-orange-300">노출형</span> 클릭을 유도하는 제목으로 홈피드 노출에 최적화된 글쓰기</p>
         </div>
       )}
+      {/* ── 헤더 + GNB + LNB 컨테이너 ── */}
+      <div onMouseLeave={() => setHoveredTab(null)}>
       {/* ── 헤더 + Lv1 탭 (같은 줄) ── */}
       <header className="bg-white border-b border-gray-200 px-6 flex items-stretch">
         <div className="flex-1 flex items-center">
@@ -1494,10 +1530,11 @@ function DashboardPageInner() {
             <button
               key={tab}
               onClick={() => switchTab(tab)}
-              className={`py-4 text-sm transition-all ${
+              onMouseEnter={() => setHoveredTab(tab)}
+              className={`py-4 text-base transition-all ${
                 !showOnboarding && activeTab === tab
                   ? 'font-bold text-gray-900'
-                  : 'font-medium text-gray-500 hover:font-bold hover:text-gray-800'
+                  : 'font-medium text-gray-600 hover:font-bold hover:text-gray-800'
               }`}
             >
               {tab === 'keyword' ? '키워드 분석' : tab === 'content' ? '글감 추천' : '글쓰기'}
@@ -1505,17 +1542,43 @@ function DashboardPageInner() {
           ))}
           <button
             onClick={() => switchTab('niche')}
-            className={`py-4 text-sm transition-all flex items-center gap-1 ${
+            onMouseEnter={() => setHoveredTab('niche')}
+            className={`py-4 text-base transition-all flex items-center gap-1 ${
               !showOnboarding && activeTab === 'niche'
                 ? 'font-bold text-red-500'
-                : 'font-medium text-gray-500 hover:font-bold hover:text-red-500'
+                : 'font-medium text-gray-600 hover:font-bold hover:text-red-500'
             }`}
           >
             <Flame className="w-3.5 h-3.5 text-red-500" />틈새 발굴
             <span className="self-start -mt-1 -ml-1 text-[7px] font-extrabold text-red-500 leading-none">HOT</span>
           </button>
         </div>
-        <div className="flex-1 flex items-center justify-end">
+        <div className="flex-1 flex items-center justify-end gap-2">
+          <Link
+            href="/agency"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-600 text-xs font-bold rounded-lg hover:bg-amber-100 transition-colors"
+          >
+            <Briefcase className="w-3.5 h-3.5" />
+            상위노출 대행
+          </Link>
+          {!user ? (
+            <div className="relative">
+              <Link
+                href="/login"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                로그인
+              </Link>
+              <Link
+                href="/signup"
+                className="absolute right-0 top-full mt-2 animate-float whitespace-nowrap inline-flex items-center gap-1 px-3 py-2 bg-white border border-blue-200 text-gray-600 text-xs font-medium tracking-tight rounded-lg shadow-md hover:shadow-lg hover:border-blue-300 transition-all"
+              >
+                <div className="absolute -top-[5px] right-4 w-2 h-2 bg-white border-l border-t border-blue-200 rotate-45" />
+                상위노출 글쓰기 <span className="font-bold text-blue-600">7일 무료</span>
+              </Link>
+            </div>
+          ) : (
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(prev => !prev)}
@@ -1553,7 +1616,7 @@ function DashboardPageInner() {
                 )}
                 <div className="h-px bg-gray-100" />
                 <button
-                  onClick={async () => { setDropdownOpen(false); await supabase.auth.signOut(); router.push('/') }}
+                  onClick={async () => { setDropdownOpen(false); await supabase.auth.signOut(); window.location.href = '/' }}
                   className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
                 >
                   <div className="text-left">
@@ -1565,74 +1628,258 @@ function DashboardPageInner() {
               </div>
             )}
           </div>
+          )}
         </div>
       </header>
-      {/* Lv2: 회색 배경 밴드 */}
+      {/* LNB: 회색 배경 밴드 */}
       <div className="bg-gray-50 border-b border-gray-200">
         <div className="max-w-3xl mx-auto px-6">
           <div className="flex justify-center gap-8">
-            {activeTab === 'keyword' && (
+            {(hoveredTab ?? (!showOnboarding ? activeTab : null)) === 'keyword' && (
               <>
-                <button onClick={() => switchSubTab('insight')} className={`py-3 text-sm transition-all ${!showOnboarding && activeSubTab === 'insight' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>키워드 인사이트</button>
-                <button onClick={() => switchSubTab('golden')} className={`py-3 text-sm transition-all ${!showOnboarding && activeSubTab === 'golden' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>황금키워드 발굴</button>
+                <button onClick={() => switchSubTab('insight')} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && activeSubTab === 'insight' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>키워드 인사이트</button>
+                <button onClick={() => switchSubTab('golden')} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && activeSubTab === 'golden' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>황금키워드 발굴</button>
               </>
             )}
-            {activeTab === 'content' && (
+            {(hoveredTab ?? (!showOnboarding ? activeTab : null)) === 'content' && (
               <>
-                <button onClick={() => switchSubTab('trend')} className={`py-3 text-sm transition-all ${activeSubTab === 'trend' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>트렌드·이슈</button>
-                <button onClick={() => switchSubTab('news')} className={`py-3 text-sm transition-all ${activeSubTab === 'news' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>실시간 뉴스</button>
-                <button onClick={() => switchSubTab('search-trend')} className={`py-3 text-sm transition-all ${activeSubTab === 'search-trend' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>검색 트렌드</button>
+                <button onClick={() => switchSubTab('trend')} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && activeSubTab === 'trend' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>트렌드·이슈</button>
+                <button onClick={() => switchSubTab('news')} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && activeSubTab === 'news' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>실시간 뉴스</button>
+                <button onClick={() => switchSubTab('search-trend')} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && activeSubTab === 'search-trend' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>검색 트렌드</button>
               </>
             )}
-            {activeTab === 'prompt' && (
+            {(hoveredTab ?? (!showOnboarding ? activeTab : null)) === 'prompt' && (
               <>
-                <button onClick={() => { setPromptSubTab('search'); setMode('write-input') }} className={`py-3 text-sm transition-all ${promptSubTab === 'search' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>검색형</button>
-
-                <button onClick={() => { setPromptSubTab('feed'); setFeedOrigin('tab'); setMode('feed-input') }} className={`py-3 text-sm transition-all ${promptSubTab === 'feed' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:font-bold hover:text-gray-800'}`}>노출형</button>
+                <button onClick={() => { setPromptSubTab('search'); setMode('write-input') }} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && promptSubTab === 'search' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>검색형</button>
+                <button onClick={() => { setPromptSubTab('feed'); setFeedOrigin('tab'); setMode('feed-input') }} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && promptSubTab === 'feed' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>노출형</button>
               </>
             )}
           </div>
         </div>
       </div>
+      </div>
 
-      <main className="max-w-3xl mx-auto px-6 py-10">
+      {showOnboarding && (
+        <>
+          {/* Hero — 흰색 */}
+          <section className="bg-white">
+            <div className="max-w-5xl mx-auto px-6 pt-16 pb-16 text-center">
+              <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 mb-5 leading-snug tracking-tight">
+                검색 1페이지에 오르는 블로그,<br />
+                <span className="text-blue-500">운이 아니라 전략</span>입니다.
+              </h1>
+              <p className="text-xl text-gray-500 min-h-[1.75rem]">
+                {typedSubtitle}
+                <span className="inline-block w-[2px] h-[1.1em] bg-gray-400 ml-0.5 align-middle animate-pulse" />
+              </p>
+            </div>
+          </section>
 
-        {/* ── 홈 카드 ── */}
-        {showOnboarding && (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">오늘 뭐 쓰실 건가요?</h2>
-            <p className="text-sm text-gray-400 mb-8">목적에 맞는 도구를 바로 열어드릴게요</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
+          {/* 블로그황금키란? — 연한 회색 */}
+          <section className="bg-gray-50">
+            <div className="max-w-5xl mx-auto px-6 pt-20 pb-20">
+              <div className="text-center mb-12">
+                <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">블로그황금키란 무엇인가요?</h2>
+                <p className="text-[18px] text-gray-700 leading-relaxed break-keep">
+                  네이버 블로그 상위노출에 필요한 키워드 분석부터 AI 글쓰기까지,<br />
+                  수익형 블로그 운영의 모든 도구를 한 곳에 모은 통합 솔루션입니다.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {[
+                  { num: '1', title: '키워드 분석', desc: '황금키워드와 경쟁 강도를 한눈에', Icon: Search },
+                  { num: '2', title: '상위노출 분석', desc: '1페이지 글의 패턴을 자동 분석', Icon: BarChart2 },
+                  { num: '3', title: 'AI 프롬프트', desc: '상위노출 글쓰기 프롬프트 자동 생성', Icon: PenLine },
+                  { num: '4', title: '수익화', desc: '검색 상단 노출, 협찬·애드포스트 수익', Icon: Trophy },
+                ].map(({ num, title, desc, Icon }) => (
+                  <div key={num} className="bg-white rounded-2xl p-7 pb-20 relative overflow-hidden">
+                    <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-500 font-bold text-sm mb-4">{num}</div>
+                    <p className="text-xl font-bold text-blue-500 mb-3 break-keep">{title}</p>
+                    <p className="text-lg text-gray-700 leading-relaxed break-keep">{desc}</p>
+                    <Icon className="absolute bottom-4 right-4 w-12 h-12 text-gray-200" strokeWidth={1.5} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* 홈 카드 — 흰색 */}
+          <section className="bg-white">
+            <div className="max-w-5xl mx-auto px-6 pt-16 pb-12 flex flex-col items-center text-center">
+              <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">오늘 뭐 쓰실 건가요?</h2>
+              <p className="text-[18px] text-gray-700 mb-10">내 상황에 맞는 도구를 골라보세요<span className="inline-block rotate-12 ml-0.5">!</span></p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full">
+                <button
+                  onClick={() => { setShowOnboarding(false); switchTab('prompt') }}
+                  className="group text-left bg-white border border-gray-200 rounded-2xl p-10 hover:border-blue-400 hover:shadow-md transition-all duration-200 active:scale-[0.98]"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-5">
+                    <PenLine className="w-6 h-6 text-blue-500" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900 mb-2">쓸 주제가 있어요</p>
+                  <p className="text-base text-gray-500 leading-relaxed">키워드 분석부터 제목, 본문 프롬프트까지 단계별로 도와드려요</p>
+                  <div className="mt-6 text-base font-semibold text-blue-500 group-hover:text-blue-600 flex items-center gap-1">
+                    글쓰기 시작 <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </button>
+                <button
+                  onClick={() => { setShowOnboarding(false); switchTab('content') }}
+                  className="group text-left bg-white border border-gray-200 rounded-2xl p-10 hover:border-amber-400 hover:shadow-md transition-all duration-200 active:scale-[0.98]"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center mb-5">
+                    <Lightbulb className="w-6 h-6 text-amber-500" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900 mb-2">아직 없어요</p>
+                  <p className="text-base text-gray-500 leading-relaxed">요즘 뜨는 키워드와 트렌드에서 쓸 거리를 찾아드릴게요</p>
+                  <div className="mt-6 text-base font-semibold text-amber-500 group-hover:text-amber-600 flex items-center gap-1">
+                    글감 찾기 <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </button>
+              </div>
+
+            </div>
+          </section>
+
+          {/* 기능 소개 — 연한 회색 */}
+          <section className="bg-gray-50">
+            <div className="max-w-5xl mx-auto px-6 pt-20 pb-20">
+            <div className="text-center mb-10">
+              <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">상위노출에 필요한 모든 것</h2>
+              <p className="text-[18px] text-gray-700">4가지 도구로 수익형 블로그를 만드세요<span className="inline-block rotate-12 ml-0.5">!</span></p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <button
-                onClick={() => { setShowOnboarding(false); switchTab('prompt') }}
-                className="group text-left bg-white border border-gray-200 rounded-2xl p-8 hover:border-blue-400 hover:shadow-md transition-all duration-200 active:scale-[0.98]"
+                onClick={() => { setShowOnboarding(false); switchTab('keyword') }}
+                className="group text-left bg-white border border-gray-200 rounded-2xl p-8 hover:border-blue-400 hover:shadow-md transition-all"
               >
-                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
-                  <PenLine className="w-5 h-5 text-blue-500" />
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-11 h-11 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Search className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">키워드 분석</p>
                 </div>
-                <p className="text-base font-bold text-gray-900 mb-1.5">쓸 주제가 있어요</p>
-                <p className="text-sm text-gray-500 leading-relaxed">키워드 분석부터 제목, 본문 프롬프트까지 단계별로 도와드려요</p>
-                <div className="mt-5 text-sm font-semibold text-blue-500 group-hover:text-blue-600 flex items-center gap-1">
-                  글쓰기 시작 <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                </div>
+                <p className="text-base text-gray-500 leading-relaxed">검색량 많고 경쟁 적은 황금키워드를 찾아드려요</p>
               </button>
               <button
                 onClick={() => { setShowOnboarding(false); switchTab('content') }}
-                className="group text-left bg-white border border-gray-200 rounded-2xl p-8 hover:border-amber-400 hover:shadow-md transition-all duration-200 active:scale-[0.98]"
+                className="group text-left bg-white border border-gray-200 rounded-2xl p-8 hover:border-amber-400 hover:shadow-md transition-all"
               >
-                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center mb-4">
-                  <Lightbulb className="w-5 h-5 text-amber-500" />
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-11 h-11 rounded-lg bg-amber-50 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">글감 추천</p>
                 </div>
-                <p className="text-base font-bold text-gray-900 mb-1.5">아직 없어요</p>
-                <p className="text-sm text-gray-500 leading-relaxed">요즘 뜨는 키워드와 트렌드에서 쓸 거리를 찾아드릴게요</p>
-                <div className="mt-5 text-sm font-semibold text-amber-500 group-hover:text-amber-600 flex items-center gap-1">
-                  글감 찾기 <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                <p className="text-base text-gray-500 leading-relaxed">실시간 트렌드와 뉴스에서 쓸 거리를 발굴해드려요</p>
+              </button>
+              <button
+                onClick={() => { setShowOnboarding(false); switchTab('prompt') }}
+                className="group text-left bg-white border border-gray-200 rounded-2xl p-8 hover:border-purple-400 hover:shadow-md transition-all"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-11 h-11 rounded-lg bg-purple-50 flex items-center justify-center">
+                    <PenLine className="w-5 h-5 text-purple-500" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">글쓰기 (AI 프롬프트)</p>
                 </div>
+                <p className="text-base text-gray-500 leading-relaxed">상위노출 알고리즘에 맞춰 AI에게 시킬 프롬프트를 자동 생성해요</p>
+              </button>
+              <button
+                onClick={() => { setShowOnboarding(false); switchTab('niche') }}
+                className="group text-left bg-white border border-gray-200 rounded-2xl p-8 hover:border-red-400 hover:shadow-md transition-all"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-11 h-11 rounded-lg bg-red-50 flex items-center justify-center">
+                    <Flame className="w-5 h-5 text-red-500" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">틈새 발굴</p>
+                </div>
+                <p className="text-base text-gray-500 leading-relaxed">경쟁 적은 전문 카테고리에서 황금 영역을 찾아드려요</p>
               </button>
             </div>
-          </div>
-        )}
+            </div>
+          </section>
 
+          {/* CTA — 흰색 */}
+          <section className="bg-white">
+            <div className="max-w-5xl mx-auto px-6 pt-20 pb-20 text-center">
+              <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">지금 시작하면 7일 무료</h2>
+              <p className="text-[18px] text-gray-700">1분 만에 가입하고, 결제 없이 사용하세요<span className="inline-block rotate-12 ml-0.5">!</span></p>
+            </div>
+          </section>
+
+          {/* 상위노출 대행 문의 카드 */}
+          <section className="bg-white pb-16">
+            <div className="max-w-5xl mx-auto px-6">
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-3xl p-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 mb-3 px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
+                    <Briefcase className="w-3 h-3" />
+                    상위노출 대행
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2 break-keep">직접 운영이 어려우신가요?</h3>
+                  <p className="text-base text-gray-700 break-keep">
+                    법무·의료·웨딩 등 전문 업종 전용 상위노출 대행 서비스
+                  </p>
+                </div>
+                <Link
+                  href="/agency"
+                  className="shrink-0 inline-flex items-center gap-2 px-6 py-3.5 bg-amber-500 text-white text-base font-bold rounded-xl hover:bg-amber-600 transition-colors"
+                >
+                  대행 문의 <ChevronRight className="w-5 h-5" />
+                </Link>
+              </div>
+            </div>
+          </section>
+
+          {/* 푸터 — 사업자 정보 (판다랭크 스타일) */}
+          <footer className="bg-gray-100 border-t border-gray-200">
+            <div className="max-w-5xl mx-auto px-6 pt-10 pb-24 text-[13px] text-gray-500 leading-relaxed text-center">
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mb-6 text-gray-700 font-medium">
+                <Link href="/privacy" className="hover:text-gray-900 transition-colors">개인정보처리방침</Link>
+                <Link href="/terms" className="hover:text-gray-900 transition-colors">이용약관</Link>
+                <Link href="/refund" className="hover:text-gray-900 transition-colors">환불정책</Link>
+                <Link href="/business" className="hover:text-gray-900 transition-colors">비즈니스문의</Link>
+              </div>
+              <div className="space-y-1 mb-4">
+                <p>상호: 소이크리에이티브 | 대표자: 강소이 | 주소: 서울특별시 영등포구 문래동</p>
+                <p>사업자번호: 146-19-02529 | 통신판매업: 신고면제(전자상거래법 시행령 제13조)</p>
+                <p>대표전화: ___ | 이메일: lavidacarinosa@naver.com</p>
+                <p>개인정보관리책임자: 강소이 | 호스팅: Vercel Inc.</p>
+              </div>
+              <p className="text-gray-400">©2026 블로그황금키. All rights reserved.</p>
+            </div>
+          </footer>
+
+        </>
+      )}
+
+      {/* 플로팅 CTA 바 — 온보딩 모드일 때 화면 하단에 고정 */}
+      {showOnboarding && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
+          <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between gap-4">
+            <p className="text-base text-gray-700 font-medium hidden sm:block">
+              키워드 분석부터 AI 글쓰기까지, 상위노출에 필요한 모든 도구
+            </p>
+            <div className="flex items-center gap-3 ml-auto">
+              <button
+                onClick={() => { setShowOnboarding(false); switchTab('keyword') }}
+                className="px-7 py-3.5 border border-gray-300 text-gray-700 text-base font-bold rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                둘러보기
+              </button>
+              <Link
+                href="/signup"
+                className="px-7 py-3.5 bg-blue-500 text-white text-base font-bold rounded-xl hover:bg-blue-600 transition-colors"
+              >
+                7일 무료 체험 시작하기
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="max-w-3xl mx-auto px-6 py-10">
         {/* ── 탭 콘텐츠 (온보딩 이후) ── */}
         {!showOnboarding && <>
 
