@@ -1832,22 +1832,28 @@ function DashboardPageInner() {
             </div>
           </section>
 
-          {/* 푸터 — 사업자 정보 (판다랭크 스타일) */}
+          {/* 푸터 — 사업자 정보 (REVU 스타일) */}
           <footer className="bg-gray-100 border-t border-gray-200">
-            <div className="max-w-5xl mx-auto px-6 pt-10 pb-24 text-[13px] text-gray-500 leading-relaxed text-center">
-              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mb-6 text-gray-700 font-medium">
+            <div className="max-w-5xl mx-auto px-6 pt-8 pb-20 text-[12px] text-gray-500 leading-relaxed">
+              <div className="font-bold text-base text-gray-700 mb-4 flex items-center gap-1.5">
+                블로그황금키 <Key className="w-4 h-4 text-yellow-400" />
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-5 text-gray-600">
                 <Link href="/privacy" className="hover:text-gray-900 transition-colors">개인정보처리방침</Link>
+                <span className="text-gray-300">|</span>
                 <Link href="/terms" className="hover:text-gray-900 transition-colors">이용약관</Link>
+                <span className="text-gray-300">|</span>
                 <Link href="/refund" className="hover:text-gray-900 transition-colors">환불정책</Link>
+                <span className="text-gray-300">|</span>
                 <Link href="/business" className="hover:text-gray-900 transition-colors">비즈니스문의</Link>
               </div>
               <div className="space-y-1 mb-4">
-                <p>상호: 소이크리에이티브 | 대표자: 강소이 | 주소: 서울특별시 영등포구 문래동</p>
+                <p>상호: 소이크리에이티브 | 대표자: 강소이 | 개인정보관리책임자: 강소이</p>
                 <p>사업자번호: 146-19-02529 | 통신판매업: 신고면제(전자상거래법 시행령 제13조)</p>
-                <p>대표전화: ___ | 이메일: lavidacarinosa@naver.com</p>
-                <p>개인정보관리책임자: 강소이 | 호스팅: Vercel Inc.</p>
+                <p>주소: 서울특별시 영등포구 문래동</p>
+                <p>이메일: lavidacarinosa@naver.com | 전화: ___</p>
               </div>
-              <p className="text-gray-400">©2026 블로그황금키. All rights reserved.</p>
+              <p className="text-gray-700 font-bold">© 2026 블로그황금키. All Rights Reserved.</p>
             </div>
           </footer>
 
