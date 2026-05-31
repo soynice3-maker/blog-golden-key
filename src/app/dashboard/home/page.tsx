@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { TrendingUp } from 'lucide-react'
 
 const FEATURES = [
   {
@@ -37,7 +38,7 @@ export default function DashboardHomePage() {
     <div className="min-h-screen bg-[#f9fafb] flex flex-col">
       {/* Header */}
       <header className="px-6 py-4 flex items-center justify-between bg-white border-b border-gray-100">
-        <span className="text-lg font-bold text-gray-900">블로그황금키 🔑</span>
+        <span className="text-lg font-bold text-gray-900 flex items-center gap-1.5">키라이즈 <TrendingUp className="w-4 h-4 text-blue-500" /></span>
         <Link href="/dashboard" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
           대시보드 바로가기 →
         </Link>

@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import { Key, ChevronLeft } from 'lucide-react'
+import { TrendingUp, ChevronLeft } from 'lucide-react'
 
 export const metadata = {
-  title: '환불정책 | 블로그황금키',
+  title: '환불정책 | 키라이즈',
 }
 
 export default function RefundPage() {
@@ -11,7 +11,7 @@ export default function RefundPage() {
       <header className="border-b border-gray-200 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <Link href="/" className="font-bold text-lg flex items-center gap-1.5">
-            블로그황금키 <Key className="w-4 h-4 text-yellow-400" />
+            키라이즈 <TrendingUp className="w-4 h-4 text-blue-500" />
           </Link>
           <Link href="/" className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1">
             <ChevronLeft className="w-4 h-4" /> 홈으로
@@ -27,7 +27,7 @@ export default function RefundPage() {
           <section>
             <h2 className="text-xl font-bold text-gray-900 mb-3">제1조 환불 원칙</h2>
             <p>
-              소이크리에이티브가 운영하는 블로그황금키(이하 &quot;회사&quot;)는 「전자상거래 등에서의 소비자보호에 관한 법률」 및
+              소이크리에이티브가 운영하는 키라이즈(이하 &quot;회사&quot;)는 「전자상거래 등에서의 소비자보호에 관한 법률」 및
               관련 법령을 준수하여 합리적인 환불 정책을 운영합니다.
             </p>
           </section>
@@ -86,7 +86,7 @@ export default function RefundPage() {
           <section>
             <h2 className="text-xl font-bold text-gray-900 mb-3">제7조 문의처</h2>
             <div className="bg-gray-50 rounded-xl p-5">
-              <p className="mb-1">서비스명: 블로그황금키</p>
+              <p className="mb-1">서비스명: 키라이즈</p>
               <p className="mb-1">운영: 소이크리에이티브 (대표: 강소이)</p>
               <p className="mb-1">이메일: lavidacarinosa@naver.com</p>
               <p>처리 시간: 영업일 기준 1~3일</p>

@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { BarChart2, Trophy, TrendingUp, Newspaper, Key, Tag, FileText, Smartphone, Link2, Hash, Lightbulb, PenLine, Copy, Flame, RefreshCw, Zap, Search, Calendar, Pencil, Plane, Shirt, Sparkles, Utensils, Monitor, Car, Home, Baby, Heart, Gamepad2, PawPrint, Dumbbell, Tv, Film, BookOpen, Briefcase, GraduationCap, Gem, User, LogOut, LogIn, ChevronRight, ChevronsDown, Info, Circle, Check, type LucideIcon } from 'lucide-react'
+import { BarChart2, Trophy, TrendingUp, TrendingDown, Newspaper, Key, Tag, FileText, Smartphone, Link2, Hash, Lightbulb, PenLine, Copy, Flame, RefreshCw, Zap, Search, Calendar, Clock, Pencil, Plane, Shirt, Sparkles, Utensils, Monitor, Car, Home, Baby, Heart, Gamepad2, PawPrint, Dumbbell, Tv, Film, BookOpen, Briefcase, GraduationCap, Gem, User, LogOut, LogIn, ChevronRight, ChevronsDown, Info, Circle, Check, AlertCircle, AlertTriangle, CheckCircle2, Plus, X, Star, type LucideIcon } from 'lucide-react'
 
 
 const WordCloud = dynamic(() => import('react-d3-cloud'), { ssr: false })
@@ -112,7 +112,7 @@ interface CrawlPost {
 interface CrawlData {
   keyword: string
   smartBlocks: string[]
-  allTitles: { title: string; blockName: string; type: string }[]
+  allTitles: { title: string; blockName: string; type: string; href?: string }[]
   posts: CrawlPost[]
   average: { charCount: number; imageCount: number; videoCount: number; headingCount: number } | null
   topHashtags: { tag: string; count: number }[]
@@ -224,27 +224,37 @@ function runAnalysis(keyword: string, cd: CrawlData, brandName = '', originalInp
   const allTitles = cd.allTitles || []
   const posts = cd.posts || []
 
-  // 키워드가 제목에 포함된 글만 필터링
-  const relevantPosts = posts.filter(p =>
-    p.title.toLowerCase().replace(/\s+/g, '').includes(kwLowerNospace) ||
-    p.title.toLowerCase().includes(kwLower)
-  )
-
-  // 브랜드명이 있으면 추가 필터링
-  const brandFiltered = brandLower
-    ? relevantPosts.filter(p => p.title.toLowerCase().includes(brandLower))
-    : relevantPosts
-
-  const analyzePosts = brandFiltered.length >= 2 ? brandFiltered :
-    relevantPosts.length >= Math.min(3, posts.length) ? relevantPosts : posts
+  // 실제 상위노출 글 그대로 분석 (키워드 포함 여부로 거르지 않음)
+  const analyzePosts = posts
 
   // ── 제목 위치
   let frontCount = 0, middleCount = 0, backCount = 0
   let spacedCount = 0, joinedCount = 0
 
+  // 키워드 위치 탐지 — 정확 매칭 실패 시 공백토큰/절반분할 폴백
+  const findKeywordIdx = (tClean: string): number => {
+    let idx = tClean.indexOf(kwLowerNospace)
+    if (idx >= 0) return idx
+    // ① 공백 토큰 모두 포함 시 (예: "문래 라멘" → ["문래","라멘"])
+    const tokens = kw.split(/\s+/).map(s => s.toLowerCase()).filter(s => s.length >= 2)
+    if (tokens.length >= 2 && tokens.every(tok => tClean.includes(tok))) {
+      return tClean.indexOf(tokens[0])
+    }
+    // ② 키워드 절반으로 쪼개서 둘 다 포함 시 (예: "문래라멘" → "문래"+"라멘")
+    if (kwLowerNospace.length >= 4) {
+      const half = Math.floor(kwLowerNospace.length / 2)
+      const part1 = kwLowerNospace.slice(0, half)
+      const part2 = kwLowerNospace.slice(half)
+      if (tClean.includes(part1) && tClean.includes(part2)) {
+        return tClean.indexOf(part1)
+      }
+    }
+    return -1
+  }
+
   allTitles.forEach(t => {
     const tClean = t.title.toLowerCase().replace(/\s+/g, '')
-    const idx = tClean.indexOf(kwLowerNospace)
+    const idx = findKeywordIdx(tClean)
     if (idx < 0) return
     const ratio = idx / tClean.length
     if (ratio < 0.25) frontCount++
@@ -581,18 +591,49 @@ const NICHE_CONFIG: Record<string, { icon: LucideIcon; color: string }> = {
   diet: { icon: Dumbbell, color: 'text-green-500' },
 }
 
+// 스크롤 시 등장하는 reveal 컨테이너
+function ScrollReveal({ children, delay = 0, className = '' }: { children: React.ReactNode; delay?: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (!ref.current) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+    )
+    observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div
+      ref={ref}
+      style={{ transitionDelay: `${delay}ms` }}
+      className={`transition-all duration-700 ease-out ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'} ${className}`}
+    >
+      {children}
+    </div>
+  )
+}
+
 function DashboardPageInner() {
   const [mounted, setMounted] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [isPro, setIsPro] = useState(false)
   const [showProModal, setShowProModal] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [mode, setMode] = useState<'write-input' | 'analyzing' | 'pattern-preview' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'golden-guide' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result' | 'feed-input' | 'feed-analyze' | 'feed-title' | 'feed-body' | 'feed-loading' | 'feed-result' | 'search-trend-category' | 'search-trend-loading' | 'search-trend-result' | 'niche-home' | 'niche-detail'>('keyword-insight-input')
-  const [activeTab, setActiveTab] = useState<'keyword' | 'content' | 'prompt' | 'niche'>('keyword')
+  const [mode, setMode] = useState<'write-input' | 'analyzing' | 'pattern-preview' | 'supplement-input' | 'result' | 'keyword-insight-input' | 'keyword-insight-loading' | 'keyword-insight-result' | 'golden-category' | 'golden-loading' | 'golden-result' | 'golden-guide' | 'trend-category' | 'trend-loading' | 'trend-result' | 'news-loading' | 'news-result' | 'feed-input' | 'feed-analyze' | 'feed-title' | 'feed-body' | 'feed-loading' | 'feed-result' | 'search-trend-category' | 'search-trend-loading' | 'search-trend-result' | 'niche-home' | 'niche-detail' | 'post-diagnose-input' | 'post-diagnose-loading' | 'post-diagnose-result' | 'rank-track-list' | 'rank-track-add' | 'rank-track-detail'>('keyword-insight-input')
+  const [activeTab, setActiveTab] = useState<'keyword' | 'content' | 'prompt' | 'diagnose' | 'niche'>('keyword')
   const [showOnboarding, setShowOnboarding] = useState(true)
   const [typedSubtitle, setTypedSubtitle] = useState('')
   const [scrolled, setScrolled] = useState(false)
-  const [activeSubTab, setActiveSubTab] = useState<'insight' | 'golden' | 'trend' | 'news' | 'search-trend'>('insight')
+  const [activeSubTab, setActiveSubTab] = useState<'insight' | 'golden' | 'trend' | 'news' | 'search-trend' | 'post-diagnose' | 'rank-track'>('insight')
   const [promptSubTab, setPromptSubTab] = useState<'search' | 'feed'>('search')
   const [writeMode, setWriteMode] = useState<'search' | 'feed'>('search')
   const [postType, setPostType] = useState<'review' | 'info' | 'simple' | ''>('')
@@ -622,6 +663,9 @@ function DashboardPageInner() {
   const [insightKeyword, setInsightKeyword] = useState('')
   const [insightData, setInsightData] = useState<InsightResult | null>(null)
   const [insightError, setInsightError] = useState('')
+  const [highlightLowCompetition, setHighlightLowCompetition] = useState(false)
+  const [heroSelectedTrend, setHeroSelectedTrend] = useState<string | null>(null)
+  const [homeTrends, setHomeTrends] = useState<string[]>([])
 
   // golden keywords state
   const [goldenCategory, setGoldenCategory] = useState('')
@@ -697,7 +741,44 @@ function DashboardPageInner() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [hoveredTab, setHoveredTab] = useState<'keyword' | 'content' | 'prompt' | 'niche' | null>(null)
+  const [hoveredTab, setHoveredTab] = useState<'keyword' | 'content' | 'prompt' | 'diagnose' | 'niche' | null>(null)
+
+  // ─── 상위노출 진단 / 글 진단 state ───
+  const [diagnosePostUrl, setDiagnosePostUrl] = useState('')
+  const [diagnoseKeyword, setDiagnoseKeyword] = useState('')
+  const [diagnoseError, setDiagnoseError] = useState('')
+  type DiagnoseQuickResult = {
+    url: string
+    keyword: string
+    rank: number | null
+    matchedTitle: string | null
+    topPosts: Array<{ rank: number; title: string; url: string; description: string }>
+    totalResults: number
+  }
+  type DiagnoseFullResult = {
+    myPost: { title: string; wordCount: number; imageCount: number; videoCount: number; hashtags: string[]; keywordDensity: number | null }
+    competitors: Array<{ rank: number; title: string; url: string; wordCount: number; imageCount: number; videoCount: number; hashtags: string[]; keywordDensity: number | null }>
+    insights: Array<{ level: 'critical' | 'warning' | 'good' | 'tip'; category: string; message: string }>
+    rank: number | null
+    cached?: boolean
+  }
+  const [diagnoseQuick, setDiagnoseQuick] = useState<DiagnoseQuickResult | null>(null)
+  const [diagnoseFull, setDiagnoseFull] = useState<DiagnoseFullResult | null>(null)
+  const [diagnoseFullLoading, setDiagnoseFullLoading] = useState(false)
+  const [diagnoseFullError, setDiagnoseFullError] = useState('')
+
+  // ─── 순위 추적 state ───
+  type TrackedKeyword = { id: string; keyword: string; target_url: string; created_at: string; last_checked: string | null; latestRank: number | null; latestChecked: string | null }
+  const [trackedList, setTrackedList] = useState<TrackedKeyword[]>([])
+  const [trackedLoading, setTrackedLoading] = useState(false)
+  const [trackedLimit, setTrackedLimit] = useState(5)
+  const [trackAddKeyword, setTrackAddKeyword] = useState('')
+  const [trackAddUrl, setTrackAddUrl] = useState('')
+  const [trackAddError, setTrackAddError] = useState('')
+  const [trackAddSaving, setTrackAddSaving] = useState(false)
+  type RankHistoryPoint = { rank: number | null; matched_title: string | null; checked_at: string; top10_snapshot: Array<{ rank: number; title: string; url: string }> }
+  const [rankHistory, setRankHistory] = useState<RankHistoryPoint[] | null>(null)
+  const [rankHistoryTracked, setRankHistoryTracked] = useState<TrackedKeyword | null>(null)
 
   const requireLogin = (): boolean => {
     if (user) return true
@@ -751,18 +832,41 @@ function DashboardPageInner() {
     } else if (tab === 'keyword') {
       setShowOnboarding(false)
       setActiveTab('keyword')
+      setActiveSubTab('insight')
+      setMode('keyword-insight-input')
     } else if (tab === 'content') {
       setShowOnboarding(false)
       setActiveTab('content')
+      setActiveSubTab('trend')
+      setMode('trend-category')
     } else if (tab === 'prompt') {
       setShowOnboarding(false)
       setActiveTab('prompt')
+      setPromptSubTab('search')
+      setMode('write-input')
+    } else if (tab === 'diagnose') {
+      setShowOnboarding(false)
+      setActiveTab('diagnose')
+      setActiveSubTab('post-diagnose')
+      setMode('post-diagnose-input')
     } else if (tab === 'niche') {
       setShowOnboarding(false)
       setActiveTab('niche')
       setMode('niche-home')
     }
   }, [searchParams])
+
+  // 홈 트렌드 키워드 로드 (비로그인 공개)
+  useEffect(() => {
+    fetch('/api/home-trends')
+      .then(r => r.json())
+      .then(d => {
+        if (d.keywords && Array.isArray(d.keywords)) {
+          setHomeTrends(d.keywords.map((k: { keyword: string }) => k.keyword).slice(0, 4))
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -802,6 +906,12 @@ function DashboardPageInner() {
     window.addEventListener('scroll', onScroll)
     return () => window.removeEventListener('scroll', onScroll)
   }, [showOnboarding])
+
+  useEffect(() => {
+    if (activeTab === 'diagnose' && activeSubTab === 'rank-track' && mode === 'rank-track-list' && user) {
+      loadTrackedKeywords()
+    }
+  }, [activeTab, activeSubTab, mode, user])
 
   const resetAll = () => {
     setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink(''); setPostType('')
@@ -875,6 +985,7 @@ function DashboardPageInner() {
   }
 
   const startGoldenGuide = (keyword: string) => {
+    if (!requireLogin()) return
     setGuideKeyword(keyword)
     setGuideIdeas('loading')
     setGuideTitles('loading')
@@ -900,6 +1011,7 @@ function DashboardPageInner() {
   }
 
   const startGolden = async (category: string) => {
+    if (!requireLogin()) return
     setGoldenCategory(category)
     setGoldenResults([])
     setGoldenOffset(0)
@@ -918,6 +1030,7 @@ function DashboardPageInner() {
   }
 
   const toggleKeyword = async (keyword: string) => {
+    if (!requireLogin()) return
     if (expandedKeyword === keyword) { setExpandedKeyword(null); return }
     setExpandedKeyword(keyword)
     if (ideasMap[keyword]) return
@@ -966,6 +1079,7 @@ function DashboardPageInner() {
   }
 
   const startTrend = async (category: string) => {
+    if (!requireLogin()) return
     setTrendCategory(category)
     setTrendError('')
     setIssueTitles([])
@@ -986,6 +1100,7 @@ function DashboardPageInner() {
   }
 
   const startSearchTrend = async (category: string) => {
+    if (!requireLogin()) return
     setSearchTrendCategory(category)
     setSearchTrendKeywords([])
     setSearchTrendError('')
@@ -1002,6 +1117,7 @@ function DashboardPageInner() {
   }
 
   const generateIssueIdea = async (topic: string) => {
+    if (!requireLogin()) return
     if (issueExpandedTopic === topic) { setIssueExpandedTopic(null); return }
     setIssueExpandedTopic(topic)
     if (issueIdeasMap[topic]) return
@@ -1044,7 +1160,7 @@ function DashboardPageInner() {
     setMode('news-result')
   }
 
-  const switchTab = (tab: 'keyword' | 'content' | 'prompt' | 'niche') => {
+  const switchTab = (tab: 'keyword' | 'content' | 'prompt' | 'diagnose' | 'niche') => {
     router.push(`/?tab=${tab}`)
     setShowOnboarding(false)
     setActiveTab(tab)
@@ -1057,6 +1173,9 @@ function DashboardPageInner() {
       setTrendCategory(''); setTrendError('')
       setIssueTitles([]); setIssueError(''); setIssueExpandedTopic(null); setIssueIdeasMap({})
       setMode('trend-category')
+    } else if (tab === 'diagnose') {
+      setActiveSubTab('post-diagnose')
+      setMode('post-diagnose-input')
     } else if (tab === 'niche') {
       setNicheDetailSlug(null)
       setNicheDetailTab('hot-posts')
@@ -1072,6 +1191,7 @@ function DashboardPageInner() {
   }
 
   const goToFeed = async (title: string, origin: 'news' | 'trend' = 'news') => {
+    if (!requireLogin()) return
     setActiveTab('prompt')
     setPromptSubTab('feed')
     setFeedOrigin(origin)
@@ -1167,6 +1287,7 @@ function DashboardPageInner() {
   }
 
   const goToWrite = (title: string, kws: string[], origin: 'trend' | null = null) => {
+    if (!requireLogin()) return
     setActiveTab('prompt')
     setPromptSubTab('search')
     setWriteOrigin(origin)
@@ -1177,8 +1298,18 @@ function DashboardPageInner() {
     setMode('write-input')
   }
 
-  const switchSubTab = (subTab: 'insight' | 'golden' | 'trend' | 'news' | 'search-trend') => {
+  const switchSubTab = (subTab: 'insight' | 'golden' | 'trend' | 'news' | 'search-trend' | 'post-diagnose' | 'rank-track') => {
     setShowOnboarding(false)
+    setHoveredTab(null)
+    // 서브탭이 속한 부모 GNB도 함께 활성화
+    const parentTab: 'keyword' | 'content' | 'diagnose' =
+      subTab === 'insight' || subTab === 'golden' ? 'keyword' :
+      subTab === 'trend' || subTab === 'news' || subTab === 'search-trend' ? 'content' :
+      'diagnose'
+    if (activeTab !== parentTab) {
+      setActiveTab(parentTab)
+      router.push(`/?tab=${parentTab}`)
+    }
     setActiveSubTab(subTab)
     if (subTab === 'insight') {
       setInsightKeyword(''); setInsightData(null); setInsightError('')
@@ -1193,12 +1324,17 @@ function DashboardPageInner() {
     } else if (subTab === 'search-trend') {
       setSearchTrendCategory(''); setSearchTrendKeywords([]); setSearchTrendError('')
       setMode('search-trend-category')
+    } else if (subTab === 'post-diagnose') {
+      setMode('post-diagnose-input')
+    } else if (subTab === 'rank-track') {
+      setMode('rank-track-list')
     } else {
       startNewsRanking()
     }
   }
 
   const generateNewsIdea = async (item: string) => {
+    if (!requireLogin()) return
     if (newsExpandedItem === item) { setNewsExpandedItem(null); return }
     setNewsExpandedItem(item)
     if (newsIdeasMap[item]) return
@@ -1282,6 +1418,7 @@ function DashboardPageInner() {
   const startAnalysis = async () => {
     if (!requireLogin()) return
     const allKws = keywordInput.trim() ? [...keywords, keywordInput.trim()] : [...keywords]
+    if (!postType) { setError('글 유형을 선택해 주세요'); return }
     if (!topic.trim()) { setError('작성 주제를 입력해 주세요'); return }
     if (allKws.length === 0) { setError('타겟 키워드를 입력해 주세요'); return }
     if (keywordInput.trim()) addKeyword(keywordInput)
@@ -1347,6 +1484,170 @@ function DashboardPageInner() {
     } catch {
       setError('분석 중 오류가 발생했습니다. 크롤러 서버가 실행 중인지 확인해주세요.')
       setMode('write-input')
+    }
+  }
+
+  // ─── 상위노출 진단 / 글 진단 (병렬 진행) ───
+  const startPostDiagnose = async () => {
+    if (!requireLogin()) return
+    if (!diagnosePostUrl.trim()) { setDiagnoseError('블로그 글 URL을 입력해주세요'); return }
+    if (!diagnoseKeyword.trim()) { setDiagnoseError('타겟 키워드를 입력해주세요'); return }
+    setDiagnoseError('')
+    setDiagnoseFullError('')
+    setDiagnoseQuick(null)
+    setDiagnoseFull(null)
+    setMode('post-diagnose-loading')
+
+    const url = diagnosePostUrl.trim()
+    const keyword = diagnoseKeyword.trim()
+    setDiagnoseFullLoading(true)
+
+    // ── Quick (Playwright 순위 체크, ~10초) ──
+    const quickPromise = fetch('/api/diagnose-post-quick', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, keyword }),
+    }).then(async r => {
+      const data = await r.json()
+      if (!r.ok || data.error) {
+        throw new Error(data.error || '빠른 진단 실패')
+      }
+      return data
+    })
+
+    quickPromise
+      .then(quickData => {
+        setDiagnoseQuick(quickData)
+        setMode('post-diagnose-result')
+
+        // Quick 결과로 받은 topPosts를 본문 분석에 사용
+        return fetch('/api/diagnose-post-full', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url, keyword,
+            topPosts: quickData.topPosts,
+            rank: quickData.rank,
+          }),
+        })
+      })
+      .then(async r => {
+        if (!r) return
+        const data = await r.json()
+        if (!r.ok || data.error) {
+          setDiagnoseFullError(data.error || '본문 분석 실패')
+        } else {
+          setDiagnoseFull(data)
+        }
+      })
+      .catch((e: any) => {
+        if (!diagnoseQuick) {
+          // Quick 단계에서 실패
+          setDiagnoseError(e.message || '진단 실패')
+          setMode('post-diagnose-input')
+        } else {
+          setDiagnoseFullError(e.message || '본문 분석 실패')
+        }
+      })
+      .finally(() => {
+        setDiagnoseFullLoading(false)
+      })
+  }
+
+  // ─── 순위 추적 ───
+  const loadTrackedKeywords = async () => {
+    if (!user) return
+    setTrackedLoading(true)
+    try {
+      const res = await fetch('/api/tracked-keywords')
+      const data = await res.json()
+      if (res.ok) {
+        setTrackedList(data.keywords || [])
+        setTrackedLimit(data.limit || 5)
+      }
+    } finally {
+      setTrackedLoading(false)
+    }
+  }
+
+  const addTrackedKeyword = async () => {
+    if (!requireLogin()) return
+    if (!trackAddKeyword.trim() || !trackAddUrl.trim()) {
+      setTrackAddError('키워드와 URL을 모두 입력해주세요')
+      return
+    }
+    setTrackAddSaving(true)
+    setTrackAddError('')
+    try {
+      const res = await fetch('/api/tracked-keywords', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: trackAddKeyword.trim(), targetUrl: trackAddUrl.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setTrackAddError(data.error || '등록 실패')
+        return
+      }
+      // 등록 직후 1회 체크
+      try {
+        const trackRes = await fetch('/api/track-rank-now', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trackedId: data.tracked.id }),
+        })
+        const trackData = await trackRes.json()
+        if (!trackRes.ok) {
+          console.warn('[Rank check failed]', trackData)
+          setTrackAddError(`등록은 됐지만 즉시 체크 실패: ${trackData.error}. 목록에서 "지금 체크"를 눌러보세요.`)
+          setTrackAddKeyword(''); setTrackAddUrl('')
+          await loadTrackedKeywords()
+          return
+        }
+        console.log('[Rank check result]', trackData)
+      } catch (e: any) {
+        console.warn('[Rank check error]', e)
+        setTrackAddError(`등록은 됐지만 체크 실패 (크롤러 서버 확인). 목록에서 다시 시도하세요.`)
+        setTrackAddKeyword(''); setTrackAddUrl('')
+        await loadTrackedKeywords()
+        return
+      }
+      setTrackAddKeyword(''); setTrackAddUrl('')
+      await loadTrackedKeywords()
+      setMode('rank-track-list')
+    } finally {
+      setTrackAddSaving(false)
+    }
+  }
+
+  const deleteTrackedKeyword = async (id: string) => {
+    if (!confirm('이 키워드 추적을 중단할까요?')) return
+    await fetch(`/api/tracked-keywords?id=${id}`, { method: 'DELETE' })
+    await loadTrackedKeywords()
+  }
+
+  const openRankDetail = async (tracked: TrackedKeyword) => {
+    setRankHistoryTracked(tracked)
+    setRankHistory(null)
+    setMode('rank-track-detail')
+    try {
+      const res = await fetch(`/api/rank-history?trackedId=${tracked.id}&days=30`)
+      const data = await res.json()
+      if (res.ok) setRankHistory(data.history || [])
+    } catch {}
+  }
+
+  const checkRankNow = async (trackedId: string) => {
+    setTrackedLoading(true)
+    try {
+      await fetch('/api/track-rank-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackedId }),
+      })
+      await loadTrackedKeywords()
+    } finally {
+      setTrackedLoading(false)
     }
   }
 
@@ -1521,12 +1822,12 @@ function DashboardPageInner() {
       {/* ── 헤더 + GNB + LNB 컨테이너 ── */}
       <div onMouseLeave={() => setHoveredTab(null)}>
       {/* ── 헤더 + Lv1 탭 (같은 줄) ── */}
-      <header className="bg-white border-b border-gray-200 px-6 flex items-stretch">
+      <header className="bg-white border-b border-gray-200 px-6 sm:px-12 lg:px-16 flex items-stretch">
         <div className="flex-1 flex items-center">
-          <div className="font-bold text-lg cursor-pointer flex items-center gap-1.5" onClick={() => { router.push('/'); setShowOnboarding(true) }}>블로그황금키 <Key className="w-4 h-4 text-yellow-400" /></div>
+          <div className="font-extrabold text-2xl tracking-tight cursor-pointer flex items-center gap-2" onClick={() => { router.push('/'); setShowOnboarding(true) }}>KeyRise <TrendingUp className="w-6 h-6 text-blue-500" /></div>
         </div>
         <div className="flex gap-10">
-          {(['keyword', 'content', 'prompt'] as const).map(tab => (
+          {(['keyword', 'content', 'prompt', 'diagnose'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => switchTab(tab)}
@@ -1537,7 +1838,7 @@ function DashboardPageInner() {
                   : 'font-medium text-gray-600 hover:font-bold hover:text-gray-800'
               }`}
             >
-              {tab === 'keyword' ? '키워드 분석' : tab === 'content' ? '글감 추천' : '글쓰기'}
+              {tab === 'keyword' ? '키워드 분석' : tab === 'content' ? '글감 추천' : tab === 'prompt' ? '글쓰기' : '상위노출 진단'}
             </button>
           ))}
           <button
@@ -1650,8 +1951,14 @@ function DashboardPageInner() {
             )}
             {(hoveredTab ?? (!showOnboarding ? activeTab : null)) === 'prompt' && (
               <>
-                <button onClick={() => { setPromptSubTab('search'); setMode('write-input') }} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && promptSubTab === 'search' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>검색형</button>
-                <button onClick={() => { setPromptSubTab('feed'); setFeedOrigin('tab'); setMode('feed-input') }} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && promptSubTab === 'feed' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>노출형</button>
+                <button onClick={() => { setShowOnboarding(false); setHoveredTab(null); if (activeTab !== 'prompt') { setActiveTab('prompt'); router.push('/?tab=prompt') } setPromptSubTab('search'); setTopic(''); setBrandName(''); setKeywords([]); setKeywordInput(''); setSubKeywords([]); setSubKeywordInput(''); setNotes(''); setReferenceLink(''); setKeywordData(null); setCrawlData(null); setAnalysis(null); setPrompt(''); setAutoSelectedKeyword(''); setMode('write-input') }} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && promptSubTab === 'search' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>검색형</button>
+                <button onClick={() => { setShowOnboarding(false); setHoveredTab(null); if (activeTab !== 'prompt') { setActiveTab('prompt'); router.push('/?tab=prompt') } setPromptSubTab('feed'); setFeedOrigin('tab'); setMode('feed-input') }} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && promptSubTab === 'feed' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>노출형</button>
+              </>
+            )}
+            {(hoveredTab ?? (!showOnboarding ? activeTab : null)) === 'diagnose' && (
+              <>
+                <button onClick={() => switchSubTab('post-diagnose')} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && activeSubTab === 'post-diagnose' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>글 진단</button>
+                <button onClick={() => switchSubTab('rank-track')} className={`py-3 text-[15px] transition-all ${!showOnboarding && !hoveredTab && activeSubTab === 'rank-track' ? 'font-bold text-gray-900 border-b-2 border-gray-900' : 'text-gray-600 hover:font-bold hover:text-gray-800'}`}>순위 추적</button>
               </>
             )}
           </div>
@@ -1661,158 +1968,409 @@ function DashboardPageInner() {
 
       {showOnboarding && (
         <>
-          {/* Hero — 흰색 */}
+          {/* Hero — 흰색 + 인터랙티브 검색바 */}
           <section className="bg-white">
-            <div className="max-w-5xl mx-auto px-6 pt-16 pb-16 text-center">
+            <div className="max-w-5xl mx-auto px-6 pt-24 pb-24 text-center">
               <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 mb-5 leading-snug tracking-tight">
                 검색 1페이지에 오르는 블로그,<br />
                 <span className="text-blue-500">운이 아니라 전략</span>입니다.
               </h1>
-              <p className="text-xl text-gray-500 min-h-[1.75rem]">
-                {typedSubtitle}
+              <p className="text-xl text-gray-500 min-h-[1.75rem] mb-14">
+                {typedSubtitle.endsWith('!') ? (
+                  <>
+                    {typedSubtitle.slice(0, -1)}
+                    <span className="inline-block rotate-12 ml-0.5">!</span>
+                  </>
+                ) : (
+                  typedSubtitle
+                )}
                 <span className="inline-block w-[2px] h-[1.1em] bg-gray-400 ml-0.5 align-middle animate-pulse" />
               </p>
+              <div className="max-w-2xl mx-auto">
+                <div className="flex gap-2 bg-white border-2 border-gray-200 rounded-2xl p-2 shadow-md focus-within:border-gray-400 focus-within:shadow-lg transition-all">
+                  <div className="flex items-center pl-3 shrink-0">
+                    <Search className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <div
+                    className="flex-1 flex items-center flex-wrap gap-2 px-2 py-3 cursor-text min-w-0 relative"
+                    onClick={() => document.getElementById('hero-input')?.focus()}
+                  >
+                    {heroSelectedTrend ? (
+                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1.5 rounded-xl text-sm font-medium">
+                        {heroSelectedTrend}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setHeroSelectedTrend(null); setInsightKeyword('') }}
+                          className="text-blue-400 hover:text-blue-600 leading-none"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
+                    ) : (
+                      <>
+                        <input
+                          id="hero-input"
+                          type="text"
+                          value={insightKeyword}
+                          onChange={(e) => setInsightKeyword(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && insightKeyword.trim()) {
+                              setShowOnboarding(false)
+                              setActiveTab('keyword')
+                              setActiveSubTab('insight')
+                              router.push('/?tab=keyword')
+                              setMode('keyword-insight-input')
+                              startInsight()
+                            }
+                          }}
+                          className="flex-1 outline-none text-base bg-transparent min-w-0 caret-gray-400 relative z-10"
+                        />
+                        {!insightKeyword && (
+                          <div className="absolute inset-y-0 left-2 flex items-center pointer-events-none gap-2">
+                            <span className="inline-block w-[2px] h-5 bg-gray-400 animate-[blink_1s_step-end_infinite]" />
+                            <span className="text-base text-gray-400">분석할 키워드를 입력해보세요</span>
+                            <span className="text-sm text-gray-400">(예: 발리 여행 코스, 부산 가구 저렴한 곳)</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const kw = insightKeyword.trim()
+                      if (!kw) return
+                      setShowOnboarding(false)
+                      setActiveTab('keyword')
+                      setActiveSubTab('insight')
+                      router.push('/?tab=keyword')
+                      setMode('keyword-insight-input')
+                      startInsight()
+                    }}
+                    disabled={!insightKeyword.trim()}
+                    className="px-6 py-3 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 whitespace-nowrap transition-colors"
+                  >
+                    분석 시작 <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 justify-center mt-5 items-center">
+                  <span className="text-sm text-gray-500 flex items-center gap-1 shrink-0 mr-1">
+                    <Flame className="w-4 h-4 text-orange-500" /> 트렌드
+                  </span>
+                  {(homeTrends.length > 0 ? homeTrends : ['발리 여행 코스', '부산 가구 저렴한 곳', '강남 카페 분위기', '홍대 맛집 혼밥']).map((kw) => (
+                    <button
+                      key={kw}
+                      onClick={() => { setHeroSelectedTrend(kw); setInsightKeyword(kw) }}
+                      className="text-sm px-3 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                    >
+                      {kw}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </section>
 
-          {/* 블로그황금키란? — 연한 회색 */}
+          {/* 공감/문제 인식 — 연한 회색 */}
           <section className="bg-gray-50">
             <div className="max-w-5xl mx-auto px-6 pt-20 pb-20">
-              <div className="text-center mb-12">
-                <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">블로그황금키란 무엇인가요?</h2>
-                <p className="text-[18px] text-gray-700 leading-relaxed break-keep">
-                  네이버 블로그 상위노출에 필요한 키워드 분석부터 AI 글쓰기까지,<br />
-                  수익형 블로그 운영의 모든 도구를 한 곳에 모은 통합 솔루션입니다.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                {[
-                  { num: '1', title: '키워드 분석', desc: '황금키워드와 경쟁 강도를 한눈에', Icon: Search },
-                  { num: '2', title: '상위노출 분석', desc: '1페이지 글의 패턴을 자동 분석', Icon: BarChart2 },
-                  { num: '3', title: 'AI 프롬프트', desc: '상위노출 글쓰기 프롬프트 자동 생성', Icon: PenLine },
-                  { num: '4', title: '수익화', desc: '검색 상단 노출, 협찬·애드포스트 수익', Icon: Trophy },
-                ].map(({ num, title, desc, Icon }) => (
-                  <div key={num} className="bg-white rounded-2xl p-7 pb-20 relative overflow-hidden">
-                    <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-500 font-bold text-sm mb-4">{num}</div>
-                    <p className="text-xl font-bold text-blue-500 mb-3 break-keep">{title}</p>
-                    <p className="text-lg text-gray-700 leading-relaxed break-keep">{desc}</p>
-                    <Icon className="absolute bottom-4 right-4 w-12 h-12 text-gray-200" strokeWidth={1.5} />
+              <ScrollReveal>
+                <div className="text-center mb-12">
+                  <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">이런 적, 있으세요?</h2>
+                  <p className="text-[18px] text-gray-700 leading-relaxed">블로그 운영하다 보면 누구나 마주치는 벽이에요</p>
+                </div>
+              </ScrollReveal>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <ScrollReveal delay={150}>
+                  <div className="bg-white rounded-2xl p-8 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-5">
+                      <TrendingDown className="w-7 h-7 text-red-500" />
+                    </div>
+                    <p className="text-lg text-gray-800 leading-relaxed font-medium break-keep">
+                      &ldquo;열심히 썼는데<br />검색 결과에 안 나와요&rdquo;
+                    </p>
                   </div>
+                </ScrollReveal>
+                <ScrollReveal delay={300}>
+                  <div className="bg-white rounded-2xl p-8 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-5">
+                      <Search className="w-7 h-7 text-amber-500" />
+                    </div>
+                    <p className="text-lg text-gray-800 leading-relaxed font-medium break-keep">
+                      &ldquo;어떤 키워드 잡아야<br />1페이지에 오를지 모르겠어요&rdquo;
+                    </p>
+                  </div>
+                </ScrollReveal>
+                <ScrollReveal delay={450}>
+                  <div className="bg-white rounded-2xl p-8 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-5">
+                      <Clock className="w-7 h-7 text-blue-500" />
+                    </div>
+                    <p className="text-lg text-gray-800 leading-relaxed font-medium break-keep">
+                      &ldquo;글 한 편 쓰는 데<br />몇 시간씩 걸려요&rdquo;
+                    </p>
+                  </div>
+                </ScrollReveal>
+              </div>
+            </div>
+          </section>
+
+          {/* 해결 흐름 — 흰색 (3단계 + 인라인 mock UI) */}
+          <section className="bg-white">
+            <div className="max-w-5xl mx-auto px-6 pt-20 pb-20">
+              <ScrollReveal>
+                <div className="text-center mb-14">
+                  <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">키라이즈가 이렇게 해결해드려요</h2>
+                  <p className="text-[18px] text-gray-700 leading-relaxed">3단계면 끝<span className="inline-block rotate-12 ml-0.5">!</span> 분석은 우리가, 사용자는 키워드만 입력하세요</p>
+                </div>
+              </ScrollReveal>
+              <div className="space-y-16">
+                {/* Step 1 */}
+                <ScrollReveal>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+                  <div>
+                    <div className="inline-flex items-center bg-blue-100 text-blue-600 font-bold text-sm px-3 py-1 rounded-full mb-4">Step 1</div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-3 break-keep">타겟 키워드 입력</h3>
+                    <p className="text-lg text-gray-600 leading-relaxed break-keep">쓰고 싶은 글의 키워드를 1~3개 입력하세요. 글 유형이랑 가게명만 더하면 끝이에요.</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-2xl p-6 shadow-sm border border-gray-100">
+                    <p className="text-sm font-medium text-gray-700 mb-2">타겟 키워드 <span className="text-red-400">*</span></p>
+                    <div className="w-full px-3 py-2 border border-blue-500 rounded-xl bg-white flex flex-wrap gap-2 min-h-[46px] mb-3">
+                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded-xl text-sm font-medium">홍대 맛집 <X className="w-3 h-3 text-blue-400" /></span>
+                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded-xl text-sm font-medium">홍대입구역 맛집 <X className="w-3 h-3 text-blue-400" /></span>
+                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded-xl text-sm font-medium">홍대 혼밥 <X className="w-3 h-3 text-blue-400" /></span>
+                    </div>
+                    {/* AI 경쟁강도 비교 + 자동 선정 */}
+                    <div className="bg-white rounded-xl p-3 mb-3 border border-gray-100">
+                      <p className="text-xs font-medium text-gray-700 mb-2 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" /> 경쟁강도 비교
+                      </p>
+                      <div className="space-y-1.5 mb-3">
+                        {[
+                          { kw: '홍대 맛집', pct: 85, color: 'bg-red-400', label: '높음', text: 'text-red-500' },
+                          { kw: '홍대입구역 맛집', pct: 25, color: 'bg-green-400', label: '낮음', text: 'text-green-500' },
+                          { kw: '홍대 혼밥', pct: 55, color: 'bg-amber-400', label: '중간', text: 'text-amber-500' },
+                        ].map(b => (
+                          <div key={b.kw} className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600 w-24 truncate shrink-0">{b.kw}</span>
+                            <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                              <div className={`${b.color} h-full transition-all`} style={{ width: `${b.pct}%` }} />
+                            </div>
+                            <span className={`text-[10px] font-medium w-8 text-right ${b.text}`}>{b.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700 flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        <span><strong>&lsquo;홍대입구역 맛집&rsquo;</strong>을 타겟 키워드로 선정</span>
+                        <span className="ml-auto text-[10px] bg-blue-500 text-white px-2 py-0.5 rounded-full font-medium shrink-0">🏆 최적</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-blue-500 text-white py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1">상위노출 분석 시작 <ChevronRight className="w-4 h-4" /></div>
+                  </div>
+                </div>
+                </ScrollReveal>
+
+                {/* Step 2 */}
+                <ScrollReveal>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+                  <div className="bg-gray-50 rounded-2xl p-5 shadow-sm border border-gray-100 md:order-1 order-2">
+                    <p className="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-1.5"><BarChart2 className="w-4 h-4" /> 키워드 데이터</p>
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      <div className="bg-white rounded-xl p-3 text-center">
+                        <p className="text-[10px] text-gray-500 mb-1">월 검색량</p>
+                        <p className="text-sm font-bold">28,400</p>
+                      </div>
+                      <div className="bg-white rounded-xl p-3 text-center">
+                        <p className="text-[10px] text-gray-500 mb-1">블로그 글수</p>
+                        <p className="text-sm font-bold">12,890</p>
+                      </div>
+                      <div className="bg-white rounded-xl p-3 text-center">
+                        <p className="text-[10px] text-gray-500 mb-1">등급</p>
+                        <p className="text-sm font-bold flex items-center justify-center gap-1">
+                          <Circle className="w-3 h-3 text-green-500" fill="currentColor" /> 황금
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><Tag className="w-4 h-4" /> 제목 패턴</p>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[
+                        { label: '평균 길이', value: '28자', color: 'text-blue-500' },
+                        { label: '키워드 위치', value: '앞부분', color: 'text-blue-500' },
+                        { label: '키워드 형태', value: '띄어쓰기', color: 'text-blue-500' },
+                        { label: '대괄호', value: 'X', color: 'text-red-500' },
+                        { label: '숫자', value: 'O', color: 'text-blue-500' },
+                      ].map((c, i) => (
+                        <div key={i} className="bg-white rounded-lg p-2 text-center">
+                          <p className="text-[10px] text-gray-500 mb-0.5 truncate">{c.label}</p>
+                          <p className={`text-xs font-bold ${c.color}`}>{c.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="md:order-2 order-1">
+                    <div className="inline-flex items-center bg-blue-100 text-blue-600 font-bold text-sm px-3 py-1 rounded-full mb-4">Step 2</div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-3 break-keep">상위노출 패턴 자동 분석</h3>
+                    <p className="text-lg text-gray-600 leading-relaxed break-keep">검색 1페이지 글들의 길이·키워드 밀도·제목 패턴을 자동으로 뽑아드려요. 직접 비교 안 해도 됩니다.</p>
+                  </div>
+                </div>
+                </ScrollReveal>
+
+                {/* Step 3 */}
+                <ScrollReveal>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+                  <div>
+                    <div className="inline-flex items-center bg-blue-100 text-blue-600 font-bold text-sm px-3 py-1 rounded-full mb-4">Step 3</div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-3 break-keep">AI 프롬프트 받기</h3>
+                    <p className="text-lg text-gray-600 leading-relaxed break-keep">분석을 바탕으로 ChatGPT·Claude에 그대로 붙여넣을 프롬프트가 자동 생성돼요.</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-2xl p-5 shadow-sm border border-gray-100">
+                    <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1.5"><Tag className="w-4 h-4" /> 제목</p>
+                    <pre className="text-xs text-gray-700 bg-white rounded-xl p-3 whitespace-pre-wrap font-sans leading-relaxed mb-3">{`[제목 작성 규칙]
+- 평균 28자 내외, 앞부분에 키워드 배치
+- 띄어쓰기 형태 권장 ('홍대 맛집')
+- 숫자 포함 (가격·횟수 등)`}</pre>
+                    <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1.5"><FileText className="w-4 h-4" /> 본문</p>
+                    <pre className="text-xs text-gray-700 bg-white rounded-xl p-3 whitespace-pre-wrap font-sans leading-relaxed mb-3">{`[알고리즘 분석]
+• 목표 글자수: 2,150자 (공백·해시태그 제외)
+• 이미지: 12장 이상
+• 소제목: 4개 (숫자형 또는 이모지 형식)
+• 키워드 등장: 8회 (밀도 2.5‰)
+• 키워드 첫 등장: 본문 초반 (상위 12%)`}</pre>
+                    <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1.5"><Lightbulb className="w-4 h-4" /> 알고리즘 인사이트 & 작성 전략</p>
+                    <div className="bg-white rounded-xl p-4">
+                      <div className="space-y-2 mb-3">
+                        <div className="h-2.5 rounded bg-gray-100 w-full" />
+                        <div className="h-2.5 rounded bg-gray-100 w-11/12" />
+                        <div className="h-2.5 rounded bg-gray-100 w-5/6" />
+                        <div className="h-2.5 rounded bg-gray-100 w-3/4" />
+                      </div>
+                      <p className="text-xs text-gray-500 text-center flex items-center justify-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        검색 1페이지에 오르는 완성된 프롬프트와 작성 노하우
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                </ScrollReveal>
+              </div>
+              <ScrollReveal>
+              <div className="text-center mt-16">
+                <button
+                  onClick={() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                    setTimeout(() => document.getElementById('hero-input')?.focus(), 600)
+                  }}
+                  className="inline-flex items-center gap-2 px-8 py-3.5 bg-blue-500 text-white text-base font-bold rounded-xl hover:bg-blue-600 transition-colors"
+                >
+                  내 키워드로 시작해보기 <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+              </ScrollReveal>
+            </div>
+          </section>
+
+          {/* 결과 증거 — 연한 회색 (mock UI) */}
+          <section className="bg-gray-50">
+            <div className="max-w-5xl mx-auto px-6 pt-32 pb-24">
+              <ScrollReveal>
+                <div className="text-center mb-16">
+                  <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">이런 분석이 나옵니다</h2>
+                  <p className="text-[18px] text-gray-700 leading-relaxed">실제 상위노출 글들의 패턴을 그대로 추출해서 보여드려요</p>
+                </div>
+              </ScrollReveal>
+              <ScrollReveal delay={150}>
+              <div className="bg-white rounded-3xl p-10 shadow-sm">
+                <p className="text-sm font-semibold text-gray-800 mb-6 flex items-center gap-1.5"><Trophy className="w-4 h-4" /> 상위노출 글</p>
+                <ul className="space-y-1.5">
+                  {[
+                    '홍대 맛집 BEST 5 — 가성비 / 분위기 / 데이트',
+                    '홍대입구역 맛집 정리 (혼밥 가능 위주)',
+                    '거주자가 픽한 홍대 맛집 솔직 후기',
+                    '홍대 맛집 데이트 코스 (디저트 카페 포함)',
+                    '1만 원 이하 홍대 가성비 맛집 BEST',
+                  ].map((t, i) => (
+                    <li key={i} className="text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg flex items-center gap-2">
+                      <span className="text-xs bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full shrink-0">{i + 1}위</span>
+                      <span className="text-xs text-gray-400 shrink-0">[맛집 인기글]</span>
+                      <span className="truncate">{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              </ScrollReveal>
+              <ScrollReveal delay={300}>
+              <div className="text-center mt-16">
+                <button
+                  onClick={() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                    setTimeout(() => document.getElementById('hero-input')?.focus(), 600)
+                  }}
+                  className="inline-flex items-center gap-2 px-8 py-3.5 bg-blue-500 text-white text-base font-bold rounded-xl hover:bg-blue-600 transition-colors"
+                >
+                  내 키워드로 상위노출 해보기 <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+              </ScrollReveal>
+            </div>
+          </section>
+
+          {/* 후기 — 흰색 (가상) */}
+          <section className="bg-white">
+            <div className="max-w-5xl mx-auto px-6 pt-20 pb-20">
+              <ScrollReveal>
+                <div className="text-center mb-12">
+                  <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">먼저 써본 분들의 후기</h2>
+                  <p className="text-[18px] text-gray-700 leading-relaxed">키라이즈로 검색 1페이지에 오른 사례들</p>
+                </div>
+              </ScrollReveal>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                {[
+                  { name: '김주영', role: '맛집 블로거', content: '키워드 잡는 데 시간을 다 쓰고 있었는데 30분으로 줄었어요. 첫 글이 2주 만에 1페이지 진입했습니다.' },
+                  { name: '이도현', role: '여행 블로거', content: '프롬프트가 진짜 알고리즘 패턴 그대로라 신기했어요. ChatGPT에 붙여넣기만 했는데 글 퀄리티가 달라요.' },
+                  { name: '박서연', role: '리빙 블로거', content: '협찬 받기 전엔 노출이 0이었는데, 키라이즈로 글 3편 쓰고 협찬 제의를 받았어요!' },
+                ].map((t, i) => (
+                  <ScrollReveal key={i} delay={150 + i * 150}>
+                    <div className="bg-gray-50 rounded-2xl p-7 flex flex-col">
+                      <div className="flex gap-0.5 mb-3">
+                        {[...Array(5)].map((_, j) => <Star key={j} className="w-4 h-4 text-amber-400" fill="currentColor" />)}
+                      </div>
+                      <p className="text-base text-gray-700 leading-relaxed mb-5 flex-1 break-keep">&ldquo;{t.content}&rdquo;</p>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">{t.name}</p>
+                        <p className="text-xs text-gray-500">{t.role}</p>
+                      </div>
+                    </div>
+                  </ScrollReveal>
                 ))}
               </div>
             </div>
           </section>
 
-          {/* 홈 카드 — 흰색 */}
-          <section className="bg-white">
-            <div className="max-w-5xl mx-auto px-6 pt-16 pb-12 flex flex-col items-center text-center">
-              <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">오늘 뭐 쓰실 건가요?</h2>
-              <p className="text-[18px] text-gray-700 mb-10">내 상황에 맞는 도구를 골라보세요<span className="inline-block rotate-12 ml-0.5">!</span></p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full">
-                <button
-                  onClick={() => { setShowOnboarding(false); switchTab('prompt') }}
-                  className="group text-left bg-white border border-gray-200 rounded-2xl p-10 hover:border-blue-400 hover:shadow-md transition-all duration-200 active:scale-[0.98]"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-5">
-                    <PenLine className="w-6 h-6 text-blue-500" />
-                  </div>
-                  <p className="text-lg font-bold text-gray-900 mb-2">쓸 주제가 있어요</p>
-                  <p className="text-base text-gray-500 leading-relaxed">키워드 분석부터 제목, 본문 프롬프트까지 단계별로 도와드려요</p>
-                  <div className="mt-6 text-base font-semibold text-blue-500 group-hover:text-blue-600 flex items-center gap-1">
-                    글쓰기 시작 <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                </button>
-                <button
-                  onClick={() => { setShowOnboarding(false); switchTab('content') }}
-                  className="group text-left bg-white border border-gray-200 rounded-2xl p-10 hover:border-amber-400 hover:shadow-md transition-all duration-200 active:scale-[0.98]"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center mb-5">
-                    <Lightbulb className="w-6 h-6 text-amber-500" />
-                  </div>
-                  <p className="text-lg font-bold text-gray-900 mb-2">아직 없어요</p>
-                  <p className="text-base text-gray-500 leading-relaxed">요즘 뜨는 키워드와 트렌드에서 쓸 거리를 찾아드릴게요</p>
-                  <div className="mt-6 text-base font-semibold text-amber-500 group-hover:text-amber-600 flex items-center gap-1">
-                    글감 찾기 <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                </button>
-              </div>
-
-            </div>
-          </section>
-
-          {/* 기능 소개 — 연한 회색 */}
+          {/* CTA — 연한 회색 */}
           <section className="bg-gray-50">
-            <div className="max-w-5xl mx-auto px-6 pt-20 pb-20">
-            <div className="text-center mb-10">
-              <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">상위노출에 필요한 모든 것</h2>
-              <p className="text-[18px] text-gray-700">4가지 도구로 수익형 블로그를 만드세요<span className="inline-block rotate-12 ml-0.5">!</span></p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <button
-                onClick={() => { setShowOnboarding(false); switchTab('keyword') }}
-                className="group text-left bg-white border border-gray-200 rounded-2xl p-8 hover:border-blue-400 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-11 h-11 rounded-lg bg-blue-50 flex items-center justify-center">
-                    <Search className="w-5 h-5 text-blue-500" />
-                  </div>
-                  <p className="text-lg font-bold text-gray-900">키워드 분석</p>
-                </div>
-                <p className="text-base text-gray-500 leading-relaxed">검색량 많고 경쟁 적은 황금키워드를 찾아드려요</p>
-              </button>
-              <button
-                onClick={() => { setShowOnboarding(false); switchTab('content') }}
-                className="group text-left bg-white border border-gray-200 rounded-2xl p-8 hover:border-amber-400 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-11 h-11 rounded-lg bg-amber-50 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-amber-500" />
-                  </div>
-                  <p className="text-lg font-bold text-gray-900">글감 추천</p>
-                </div>
-                <p className="text-base text-gray-500 leading-relaxed">실시간 트렌드와 뉴스에서 쓸 거리를 발굴해드려요</p>
-              </button>
-              <button
-                onClick={() => { setShowOnboarding(false); switchTab('prompt') }}
-                className="group text-left bg-white border border-gray-200 rounded-2xl p-8 hover:border-purple-400 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-11 h-11 rounded-lg bg-purple-50 flex items-center justify-center">
-                    <PenLine className="w-5 h-5 text-purple-500" />
-                  </div>
-                  <p className="text-lg font-bold text-gray-900">글쓰기 (AI 프롬프트)</p>
-                </div>
-                <p className="text-base text-gray-500 leading-relaxed">상위노출 알고리즘에 맞춰 AI에게 시킬 프롬프트를 자동 생성해요</p>
-              </button>
-              <button
-                onClick={() => { setShowOnboarding(false); switchTab('niche') }}
-                className="group text-left bg-white border border-gray-200 rounded-2xl p-8 hover:border-red-400 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-11 h-11 rounded-lg bg-red-50 flex items-center justify-center">
-                    <Flame className="w-5 h-5 text-red-500" />
-                  </div>
-                  <p className="text-lg font-bold text-gray-900">틈새 발굴</p>
-                </div>
-                <p className="text-base text-gray-500 leading-relaxed">경쟁 적은 전문 카테고리에서 황금 영역을 찾아드려요</p>
-              </button>
-            </div>
-            </div>
-          </section>
-
-          {/* CTA — 흰색 */}
-          <section className="bg-white">
             <div className="max-w-5xl mx-auto px-6 pt-20 pb-20 text-center">
-              <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">지금 시작하면 7일 무료</h2>
-              <p className="text-[18px] text-gray-700">1분 만에 가입하고, 결제 없이 사용하세요<span className="inline-block rotate-12 ml-0.5">!</span></p>
+              <ScrollReveal>
+                <h2 className="text-[35px] font-bold text-gray-900 mb-3 leading-tight">지금 시작하면 7일 무료</h2>
+                <p className="text-[18px] text-gray-700 mb-8">1분 만에 가입하고, 결제 없이 사용하세요<span className="inline-block rotate-12 ml-0.5">!</span></p>
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center gap-2 px-10 py-4 bg-blue-500 text-white text-base font-bold rounded-xl hover:bg-blue-600 transition-colors"
+                >
+                  지금 무료로 시작하기 <ChevronRight className="w-5 h-5" />
+                </Link>
+              </ScrollReveal>
             </div>
           </section>
 
           {/* 상위노출 대행 문의 카드 */}
-          <section className="bg-white pb-16">
+          <section className="bg-white pt-20 pb-20">
             <div className="max-w-5xl mx-auto px-6">
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-3xl p-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-                <div>
+              <ScrollReveal>
+              <div className="relative bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200/50 rounded-3xl p-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 overflow-hidden">
+                {/* 우측 데코 (서클) */}
+                <div className="absolute -right-12 -top-12 w-44 h-44 bg-amber-200/30 rounded-full blur-2xl pointer-events-none" />
+                <div className="absolute right-20 -bottom-16 w-32 h-32 bg-orange-200/40 rounded-full blur-2xl pointer-events-none" />
+
+                <div className="relative">
                   <div className="inline-flex items-center gap-1.5 mb-3 px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
                     <Briefcase className="w-3 h-3" />
                     상위노출 대행
@@ -1824,36 +2382,57 @@ function DashboardPageInner() {
                 </div>
                 <Link
                   href="/agency"
-                  className="shrink-0 inline-flex items-center gap-2 px-6 py-3.5 bg-amber-500 text-white text-base font-bold rounded-xl hover:bg-amber-600 transition-colors"
+                  className="relative shrink-0 inline-flex items-center gap-2 px-6 py-3.5 bg-amber-500 text-white text-base font-bold rounded-xl hover:bg-amber-600 transition-colors shadow-md shadow-amber-300/40"
                 >
                   대행 문의 <ChevronRight className="w-5 h-5" />
                 </Link>
               </div>
+              </ScrollReveal>
             </div>
           </section>
 
-          {/* 푸터 — 사업자 정보 (REVU 스타일) */}
+          {/* 푸터 — 사업자 정보 (REVU 스타일, 우측 CTA) */}
           <footer className="bg-gray-100 border-t border-gray-200">
-            <div className="max-w-5xl mx-auto px-6 pt-8 pb-20 text-[12px] text-gray-500 leading-relaxed">
-              <div className="font-bold text-base text-gray-700 mb-4 flex items-center gap-1.5">
-                블로그황금키 <Key className="w-4 h-4 text-yellow-400" />
+            <div className="px-6 sm:px-12 lg:px-16 pt-6 pb-14 text-[12px] text-gray-500 leading-snug">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-8">
+                {/* 좌측: 사업자 정보 */}
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <div className="font-bold text-base text-gray-700 mb-3 flex items-center gap-1.5">
+                    키라이즈 <TrendingUp className="w-4 h-4 text-blue-500" />
+                  </div>
+
+                  {/* 법적 링크 */}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3 text-gray-600">
+                    <Link href="/privacy" className="hover:text-gray-900 transition-colors">개인정보처리방침</Link>
+                    <span className="text-gray-300">|</span>
+                    <Link href="/terms" className="hover:text-gray-900 transition-colors">이용약관</Link>
+                    <span className="text-gray-300">|</span>
+                    <Link href="/refund" className="hover:text-gray-900 transition-colors">환불정책</Link>
+                  </div>
+
+                  {/* 사업자 정보 */}
+                  <div className="space-y-0.5 mb-3">
+                    <p>상호: 소이크리에이티브 | 대표자: 강소이 | 개인정보관리책임자: 강소이</p>
+                    <p>사업자번호: 146-19-02529 | 통신판매업: 신고면제(전자상거래법 시행령 제13조)</p>
+                    <p>주소: 서울특별시 영등포구 문래동</p>
+                    <p>이메일: lavidacarinosa@naver.com | 전화: ___</p>
+                  </div>
+                  <p className="text-gray-700 font-bold">© 2026 키라이즈. All Rights Reserved.</p>
+                </div>
+
+                {/* 우측: 비즈니스 문의 CTA */}
+                <div className="shrink-0 sm:text-right sm:max-w-xs">
+                  <p className="text-2xl font-bold text-gray-800 mb-1">비즈니스 문의</p>
+                  <p className="text-[13px] text-gray-500 mb-3">제휴 · 협업 · 광고</p>
+                  <p className="text-[11px] text-gray-400 mb-4">영업일 기준 2~3일 내 답변드려요</p>
+                  <Link
+                    href="/business"
+                    className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gray-800 text-white text-[13px] font-bold rounded-lg hover:bg-gray-900 transition-colors"
+                  >
+                    문의하기 <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-5 text-gray-600">
-                <Link href="/privacy" className="hover:text-gray-900 transition-colors">개인정보처리방침</Link>
-                <span className="text-gray-300">|</span>
-                <Link href="/terms" className="hover:text-gray-900 transition-colors">이용약관</Link>
-                <span className="text-gray-300">|</span>
-                <Link href="/refund" className="hover:text-gray-900 transition-colors">환불정책</Link>
-                <span className="text-gray-300">|</span>
-                <Link href="/business" className="hover:text-gray-900 transition-colors">비즈니스문의</Link>
-              </div>
-              <div className="space-y-1 mb-4">
-                <p>상호: 소이크리에이티브 | 대표자: 강소이 | 개인정보관리책임자: 강소이</p>
-                <p>사업자번호: 146-19-02529 | 통신판매업: 신고면제(전자상거래법 시행령 제13조)</p>
-                <p>주소: 서울특별시 영등포구 문래동</p>
-                <p>이메일: lavidacarinosa@naver.com | 전화: ___</p>
-              </div>
-              <p className="text-gray-700 font-bold">© 2026 블로그황금키. All Rights Reserved.</p>
             </div>
           </footer>
 
@@ -1885,7 +2464,7 @@ function DashboardPageInner() {
         </div>
       )}
 
-      <main className="max-w-3xl mx-auto px-6 py-10">
+      <main className="max-w-4xl mx-auto px-6 py-10">
         {/* ── 탭 콘텐츠 (온보딩 이후) ── */}
         {!showOnboarding && <>
 
@@ -2427,14 +3006,14 @@ function DashboardPageInner() {
             <p className="text-gray-400 text-sm mb-6 pl-2">키워드를 입력하면 상위노출 패턴을 분석하고 프롬프트를 만들어드려요</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">글 유형</label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">글 유형 <span className="text-red-400">*</span></label>
                 <div className="flex gap-2">
                   {([['review', '후기·리뷰'], ['info', '정보·가이드'], ['simple', '일상·기록']] as const).map(([val, label]) => (
                     <button
                       key={val}
                       type="button"
                       onClick={() => setPostType(prev => prev === val ? '' : val)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                      className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors border ${
                         postType === val
                           ? 'bg-blue-500 text-white border-blue-500'
                           : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
@@ -2446,23 +3025,11 @@ function DashboardPageInner() {
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">작성 주제 <span className="text-red-400">*</span></label>
-                <input type="text" placeholder="예: 문래 라멘 로라멘 후기" value={topic} onChange={e => setTopic(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">가게·브랜드명 <span className="text-gray-400 font-normal">(선택)</span></label>
-                <input type="text" placeholder="예: 몽밀, 로라멘, 스타벅스"
-                  value={brandName} onChange={e => setBrandName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
-                <p className="text-xs text-gray-400 mt-1">입력하면 내 가게·브랜드에 딱 맞는 분석 결과가 나와요</p>
-              </div>
-              <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">타겟 키워드 <span className="text-red-400">*</span> <span className="text-gray-400 font-normal">(최대 3개)</span></label>
                 <div className="w-full px-3 py-2 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus-within:border-blue-500 flex flex-wrap gap-2 min-h-[46px] cursor-text"
                   onClick={() => document.getElementById('keyword-input')?.focus()}>
                   {keywords.map((kw, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
+                    <span key={i} className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded-xl text-sm font-medium">
                       {kw}
                       <button type="button" onClick={() => setKeywords(prev => prev.filter((_, j) => j !== i))}
                         className="text-blue-400 hover:text-blue-600 leading-none">×</button>
@@ -2484,7 +3051,7 @@ function DashboardPageInner() {
                 <div className="w-full px-3 py-2 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus-within:border-blue-500 flex flex-wrap gap-2 min-h-[46px] cursor-text"
                   onClick={() => document.getElementById('sub-keyword-input')?.focus()}>
                   {subKeywords.map((kw, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium">
+                    <span key={i} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-3 py-1 rounded-xl text-sm font-medium">
                       {kw}
                       <button type="button" onClick={() => setSubKeywords(prev => prev.filter((_, j) => j !== i))}
                         className="text-gray-400 hover:text-gray-600 leading-none">×</button>
@@ -2499,10 +3066,22 @@ function DashboardPageInner() {
                 </div>
                 <p className="text-xs text-gray-400 mt-1">함께 노출되길 원하는 키워드를 쉼표(,)로 구분해서 입력하세요</p>
               </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">작성 주제 <span className="text-red-400">*</span></label>
+                <input type="text" placeholder="예: 문래 라멘 로라멘 후기" value={topic} onChange={e => setTopic(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">가게·브랜드명 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <input type="text" placeholder="예: 몽밀, 로라멘, 스타벅스"
+                  value={brandName} onChange={e => setBrandName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
+                <p className="text-xs text-gray-400 mt-1">입력하면 내 가게·브랜드에 딱 맞는 분석 결과가 나와요</p>
+              </div>
               {error && <p className="text-red-500 text-sm">{error}</p>}
-              <button onClick={startAnalysis} disabled={!mainKeyword}
-                className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                {!mainKeyword ? '필수 항목을 모두 입력해야 분석을 시작할 수 있어요' : <span className="flex items-center justify-center gap-1">상위노출 분석 시작 <ChevronRight className="w-4 h-4" /></span>}
+              <button onClick={startAnalysis} disabled={!mainKeyword || !postType || !topic.trim()}
+                className="w-full bg-blue-500 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                {!mainKeyword || !postType || !topic.trim() ? '필수 항목을 모두 입력해야 분석을 시작할 수 있어요' : <span className="flex items-center justify-center gap-1">상위노출 분석 시작 <ChevronRight className="w-4 h-4" /></span>}
               </button>
             </div>
           </div>
@@ -2549,7 +3128,7 @@ function DashboardPageInner() {
             {/* 키워드 통계 */}
             {keywordData && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><BarChart2 className="w-3.5 h-3.5" /> 키워드 데이터</p>
+                <p className="text-sm font-semibold text-gray-800 mb-6 flex items-center gap-1.5"><BarChart2 className="w-4 h-4" /> 키워드 데이터</p>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-gray-50 rounded-xl p-3 text-center">
                     <p className="text-xs text-gray-500 mb-1">월 검색량</p>
@@ -2570,42 +3149,75 @@ function DashboardPageInner() {
               </div>
             )}
 
+            {/* 상위노출 글 — 제목/본문 패턴 분석의 공통 데이터 소스 */}
+            {crawlData?.allTitles && crawlData.allTitles.length > 0 && (
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <p className="text-sm font-semibold text-gray-800 mb-6 flex items-center gap-1.5"><Trophy className="w-4 h-4" /> 상위노출 글</p>
+                <ul className="space-y-1.5">
+                  {(() => {
+                    const blockCounts: Record<string, number> = {}
+                    return crawlData.allTitles.slice(0, 5).map((t, i) => {
+                      blockCounts[t.blockName] = (blockCounts[t.blockName] || 0) + 1
+                      const rank = blockCounts[t.blockName]
+                      return (
+                        <li key={i}>
+                          {t.href ? (
+                            <a href={t.href} target="_blank" rel="noreferrer" className="text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                              <span className="text-xs bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full shrink-0">{rank}위</span>
+                              <span className="text-xs text-gray-400 shrink-0">[{t.blockName}]</span>
+                              <span>{t.title}</span>
+                            </a>
+                          ) : (
+                            <div className="text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg flex items-center gap-2">
+                              <span className="text-xs bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full shrink-0">{rank}위</span>
+                              <span className="text-xs text-gray-400 shrink-0">[{t.blockName}]</span>
+                              <span>{t.title}</span>
+                            </div>
+                          )}
+                        </li>
+                      )
+                    })
+                  })()}
+                </ul>
+              </div>
+            )}
+
             {/* 제목 패턴 분석 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-              <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> 제목 패턴 분석</p>
-              <div className="grid grid-cols-3 gap-3">
+              <p className="text-sm font-semibold text-gray-800 mb-6 flex items-center gap-1.5"><Tag className="w-4 h-4" /> 제목 패턴 분석</p>
+              <div className="grid grid-cols-5 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">평균 제목 길이</p>
-                  <p className="text-sm font-bold text-blue-500">{analysis.avgTitleLength}자</p>
+                  <p className="text-sm font-bold text-blue-500">{analysis.titleTotal === 0 ? '-' : `${analysis.avgTitleLength}자`}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">키워드 위치</p>
                   <p className="text-sm font-bold text-blue-500">
-                    {analysis.frontCount >= analysis.middleCount && analysis.frontCount >= analysis.backCount ? '앞부분' :
-                      analysis.middleCount >= analysis.backCount ? '중반부' : '뒷부분'}
+                    {analysis.titleTotal === 0 || (analysis.frontCount + analysis.middleCount + analysis.backCount) === 0 ? '-' :
+                      analysis.frontCount >= analysis.middleCount && analysis.frontCount >= analysis.backCount ? '앞부분' :
+                        analysis.middleCount >= analysis.backCount ? '중반부' : '뒷부분'}
                   </p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">키워드 형태</p>
                   <p className="text-sm font-bold text-blue-500">
-                    {analysis.joinedCount > analysis.spacedCount ? '붙여쓰기' : '띄어쓰기'}
+                    {analysis.titleTotal === 0 || (analysis.joinedCount + analysis.spacedCount) === 0 ? '-' :
+                      analysis.joinedCount > analysis.spacedCount ? '붙여쓰기' : '띄어쓰기'}
+                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500 mb-1">대괄호 활용</p>
+                  <p className={`text-sm font-bold ${analysis.titleTotal === 0 ? 'text-gray-400' : analysis.bracketCount >= analysis.titleTotal * 0.3 ? 'text-blue-500' : 'text-red-500'}`}>
+                    {analysis.titleTotal === 0 ? '-' : analysis.bracketCount >= analysis.titleTotal * 0.3 ? 'O' : 'X'}
+                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500 mb-1">숫자 포함</p>
+                  <p className={`text-sm font-bold ${analysis.titleTotal === 0 ? 'text-gray-400' : analysis.numberCount >= analysis.titleTotal * 0.3 ? 'text-blue-500' : 'text-red-500'}`}>
+                    {analysis.titleTotal === 0 ? '-' : analysis.numberCount >= analysis.titleTotal * 0.3 ? 'O' : 'X'}
                   </p>
                 </div>
               </div>
-              {(analysis.bracketCount >= analysis.titleTotal * 0.3 || analysis.numberCount >= analysis.titleTotal * 0.3) && (
-                <div className="flex gap-3">
-                  {analysis.bracketCount >= analysis.titleTotal * 0.3 && (
-                    <span className="text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg">
-                      [] 대괄호 활용 {analysis.bracketCount}/{analysis.titleTotal}개
-                    </span>
-                  )}
-                  {analysis.numberCount >= analysis.titleTotal * 0.3 && (
-                    <span className="text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg">
-                      숫자 포함 {analysis.numberCount}/{analysis.titleTotal}개
-                    </span>
-                  )}
-                </div>
-              )}
               {analysis.modifiers.length > 0 && (
                 <div>
                   <p className="text-xs text-gray-500 mb-2">자주 쓰인 수식어</p>
@@ -2618,100 +3230,67 @@ function DashboardPageInner() {
                   </div>
                 </div>
               )}
-              {crawlData?.allTitles && crawlData.allTitles.length > 0 && (() => {
-                const kw = (keywordData?.keyword || mainKeyword).trim()
-                const kwNs = kw.replace(/\s+/g, '').toLowerCase()
-                const kwL = kw.toLowerCase()
-                const brandL = brandName.trim().toLowerCase()
-                const kwFiltered = crawlData.allTitles.filter(t =>
-                  t.title.toLowerCase().replace(/\s+/g, '').includes(kwNs) ||
-                  t.title.toLowerCase().includes(kwL)
-                )
-                const brandFiltered = brandL
-                  ? kwFiltered.filter(t => t.title.toLowerCase().includes(brandL))
-                  : kwFiltered
-                const filtered = brandFiltered.length >= 3 ? brandFiltered : kwFiltered
-                const displayTitles = filtered.length >= 3 ? filtered : crawlData.allTitles
-                return (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-2">상위노출 제목</p>
-                    <ul className="space-y-1.5">
-                      {displayTitles.slice(0, 6).map((t, i) => (
-                        <li key={i} className="text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg flex gap-2">
-                          <span className="text-xs text-gray-400 shrink-0">[{t.blockName}]</span>
-                          <span>{t.title}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )
-              })()}
             </div>
 
-            {/* 본문 키워드 분석 */}
+            {/* 본문 패턴 분석 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-              <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> 본문 키워드 분석</p>
+              <div>
+                <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1.5"><FileText className="w-4 h-4" /> 본문 패턴 분석</p>
+                <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                  키워드: <span className="inline-flex items-center bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">{savedKeyword || mainKeyword}</span>
+                </p>
+              </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">키워드 평균 노출</p>
-                  <p className="text-sm font-bold text-blue-500">{analysis.avgKwCount}회</p>
+                  <p className="text-sm font-bold text-blue-500">{analysis.titleTotal === 0 ? '-' : `${analysis.avgKwCount}회`}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">글 한 편당</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">키워드 밀도</p>
-                  <p className="text-sm font-bold text-blue-500">{analysis.avgKwDensity}‰</p>
+                  <p className="text-sm font-bold text-blue-500">{analysis.titleTotal === 0 ? '-' : `${analysis.avgKwDensity}‰`}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">1,000자당</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">첫 등장 위치</p>
-                  <p className="text-sm font-bold text-blue-500">{analysis.avgFirstPos.split('(')[0].trim()}</p>
+                  <p className="text-sm font-bold text-blue-500">{analysis.titleTotal === 0 || analysis.avgKwCount === 0 ? '-' : analysis.avgFirstPos.split('(')[0].trim()}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">본문에서 처음 등장</p>
                 </div>
               </div>
-              {analysis.perPostKw.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-500 mb-2">글별 키워드 노출</p>
-                  <ul className="space-y-1">
-                    {analysis.perPostKw.map((p, i) => (
-                      <li key={i} className="flex items-center justify-between text-sm bg-gray-50 px-3 py-2 rounded-lg">
-                        <span className="text-gray-600 truncate flex-1 mr-2">{p.title}</span>
-                        <span className="text-blue-500 font-medium shrink-0">{p.count}회 ({p.density}‰)</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <div className="grid grid-cols-3 gap-3 pt-1 border-t border-gray-100">
-                <div className="text-center">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">평균 글자수 <span className="text-gray-400">(공백제외)</span></p>
-                  <p className="text-sm font-bold">{analysis.avgChars.toLocaleString()}자</p>
+                  <p className="text-sm font-bold">{analysis.titleTotal === 0 ? '-' : `${analysis.avgChars.toLocaleString()}자`}</p>
                 </div>
-                <div className="text-center">
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">평균 이미지</p>
-                  <p className="text-sm font-bold">{analysis.avgImages}장</p>
+                  <p className="text-sm font-bold">{analysis.titleTotal === 0 ? '-' : `${analysis.avgImages}장`}</p>
                 </div>
-                <div className="text-center">
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">평균 소제목</p>
-                  <p className="text-sm font-bold">{analysis.avgHeadings}개</p>
+                  <p className="text-sm font-bold">{analysis.titleTotal === 0 ? '-' : `${analysis.avgHeadings}개`}</p>
                 </div>
               </div>
             </div>
 
             {/* 작성 스타일 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5" /> 작성 스타일</p>
+              <p className="text-sm font-semibold text-gray-800 mb-6 flex items-center gap-1.5"><Smartphone className="w-4 h-4" /> 작성 스타일</p>
               <div className="flex flex-wrap gap-2">
-                <span className={`inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium ${analysis.mobileOptPct >= 50 ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${analysis.mobileOptPct >= 50 ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
                   <Smartphone className="w-3 h-3" /> 모바일 최적화 {analysis.mobileOptPct >= 50 ? '권장' : '해당없음'}
                 </span>
                 {analysis.avgImages > 0 && (
-                  <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-600 px-3 py-1 rounded-full font-medium">
+                  <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-600 px-2.5 py-1 rounded-full font-medium">
                     <Search className="w-3 h-3" /> 이미지 평균 {analysis.avgImages}장
                   </span>
                 )}
                 {analysis.avgVideos > 0 && (
-                  <span className="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-3 py-1 rounded-full font-medium">
+                  <span className="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-2.5 py-1 rounded-full font-medium">
                     <Zap className="w-3 h-3" /> 영상 평균 {analysis.avgVideos}개
                   </span>
                 )}
-                <span className={`inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium ${analysis.avgHeadings > 0 ? 'bg-orange-50 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
+                <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${analysis.avgHeadings > 0 ? 'bg-orange-50 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
                   <FileText className="w-3 h-3" /> 소제목 {analysis.avgHeadings > 0 ? `평균 ${analysis.avgHeadings}개 (${analysis.headingNumbered ? '숫자형' : '일반형'})` : '미사용'}
                 </span>
               </div>
@@ -2721,8 +3300,8 @@ function DashboardPageInner() {
             {/* 추천 해시태그 */}
             {analysis.topHashtags.length > 0 && (
               <div className="bg-white rounded-2xl p-5 shadow-sm relative overflow-hidden">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> 추천 해시태그</p>
+                <div className="flex items-center justify-between mb-6">
+                  <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5"><Hash className="w-4 h-4" /> 추천 해시태그</p>
                   {isPro && (
                     <button onClick={copyHashtags}
                       className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
@@ -2760,7 +3339,7 @@ function DashboardPageInner() {
             {/* 알고리즘 인사이트 */}
             {analysis.insights.length > 0 && (
               <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-                <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Lightbulb className="w-3.5 h-3.5" /> 알고리즘 인사이트 & 작성 전략</p>
+                <p className="text-sm font-semibold text-gray-800 mb-6 flex items-center gap-1.5"><Lightbulb className="w-4 h-4" /> 알고리즘 인사이트 & 작성 전략</p>
 
                 {/* 인사이트 리스트 — 무료는 블러 오버레이 */}
                 <div className="relative overflow-hidden rounded-xl">
@@ -2813,7 +3392,7 @@ function DashboardPageInner() {
             {/* 작성 포인트 */}
             {analysis.strategy && (
               <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4 relative overflow-hidden">
-                <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><PenLine className="w-3.5 h-3.5" /> 작성 포인트</p>
+                <p className="text-sm font-semibold text-gray-800 mb-6 flex items-center gap-1.5"><PenLine className="w-4 h-4" /> 작성 포인트</p>
                 <div className={`space-y-4 ${!isPro ? 'select-none pointer-events-none' : ''}`}>
                   {analysis.strategy.titleStructure.length > 0 && (
                     <div>
@@ -2876,7 +3455,7 @@ function DashboardPageInner() {
 
             {/* 상위노출 필수 항목 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm relative overflow-hidden">
-              <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-gray-500" /> 상위노출 필수 항목</p>
+              <p className="text-sm font-semibold text-gray-800 mb-6 flex items-center gap-1.5"><FileText className="w-4 h-4 text-gray-500" /> 상위노출 필수 항목</p>
               {!isPro ? (
                 <>
                   <div className="space-y-2.5 select-none pointer-events-none min-h-[180px]">
@@ -2927,7 +3506,7 @@ function DashboardPageInner() {
             <div className="sticky bottom-4 z-10">
               <button
                 onClick={() => { setMode('supplement-input'); window.scrollTo({ top: 0 }) }}
-                className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600 shadow-lg"
+                className="w-full bg-blue-500 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-blue-600 shadow-lg"
               >
                 <span className="flex items-center justify-center gap-1">내 글 정보 입력하기 <ChevronRight className="w-4 h-4" /></span>
               </button>
@@ -2944,7 +3523,7 @@ function DashboardPageInner() {
             {/* 참고사항 + 참고링크 */}
             <h3 className="text-base font-bold pl-2">방문·사용 경험</h3>
             <p className="text-gray-600 text-sm -mt-2 pl-2">아래 정보를 채울수록 더 구체적이고 좋은 글을 만들 수 있어요.</p>
-            <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">참고사항 <span className="text-gray-400 font-normal">(선택)</span></label>
                 <textarea
@@ -3074,7 +3653,7 @@ function DashboardPageInner() {
           <div className="sticky bottom-0 left-0 right-0 px-4 pt-8 pb-3 flex flex-col gap-2 bg-gradient-to-t from-white via-white to-transparent">
             <button
               onClick={proceedToPrompt}
-              className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-600"
+              className="w-full bg-blue-500 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-blue-600"
             >
               {Object.values(supplementMap).some(v => v.trim()) ? <span className="flex items-center justify-center gap-1">추가하고 프롬프트 생성 <ChevronRight className="w-4 h-4" /></span> : <span className="flex items-center justify-center gap-1">프롬프트 생성 <ChevronRight className="w-4 h-4" /></span>}
             </button>
@@ -3099,7 +3678,7 @@ function DashboardPageInner() {
                 <p className="text-sm text-gray-400 mt-2 flex items-center gap-1.5"><Copy className="w-3.5 h-3.5" /> 사용하는 AI에 붙여넣으세요</p>
               </div>
               <button onClick={() => { navigator.clipboard.writeText(prompt); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
-                className={`text-sm px-4 py-2 rounded-lg font-medium transition-all ${copied ? 'bg-green-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>
+                className={`text-sm px-4 py-2 rounded-xl font-medium transition-all ${copied ? 'bg-green-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>
                 {copied ? '복사됨 ✓' : '전체 프롬프트 복사'}
               </button>
             </div>
@@ -3107,14 +3686,14 @@ function DashboardPageInner() {
             {/* 프롬프트 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
               <div>
-                <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5 mb-2"><span className="text-gray-400">•</span> 제목</p>
+                <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5 mb-2"><Tag className="w-4 h-4" /> 제목</p>
                 <pre className="text-sm text-gray-700 bg-gray-50 rounded-xl p-4 whitespace-pre-wrap font-sans leading-relaxed">{(() => {
                   const sep = '━━━ 본문 작성 ━━━'
                   return prompt.includes(sep) ? prompt.split(sep)[0].trimEnd() : prompt
                 })()}</pre>
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5 mb-2"><span className="text-gray-400">•</span> 본문</p>
+                <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5 mb-2"><FileText className="w-4 h-4" /> 본문</p>
                 {isPro && prompt.includes('━━━ 본문 작성 ━━━') ? (
                   <pre className="text-sm text-gray-700 bg-gray-50 rounded-xl p-4 whitespace-pre-wrap font-sans leading-relaxed">{'━━━ 본문 작성 ━━━' + prompt.split('━━━ 본문 작성 ━━━')[1]}</pre>
                 ) : (
@@ -3143,10 +3722,10 @@ function DashboardPageInner() {
                 <button
                   key={cat.id}
                   onClick={() => startGolden(cat.id)}
-                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md hover:bg-gray-50/70 p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
+                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md hover:bg-gray-50/70 p-6 rounded-2xl text-center transition-all group flex flex-col items-center"
                 >
-                  <cat.icon className={`w-6 h-6 mb-2 ${cat.color}`} />
-                  <p className="font-medium text-sm">{cat.label}</p>
+                  <cat.icon className={`w-8 h-8 mb-3 ${cat.color}`} />
+                  <p className="font-medium text-base">{cat.label}</p>
                 </button>
               ))}
             </div>
@@ -3180,8 +3759,8 @@ function DashboardPageInner() {
             <h2 className="text-xl font-bold pl-2">황금키워드 발굴</h2>
             <p className="text-gray-400 text-sm -mt-2 pl-2 flex items-center gap-1">
               카테고리:
-              {(() => { const cat = CATEGORIES.find(c => c.id === goldenCategory); return cat ? <cat.icon className="w-3.5 h-3.5" /> : null })()}
-              <span className="text-gray-400 font-medium">{CATEGORIES.find(c => c.id === goldenCategory)?.label}</span>
+              {(() => { const cat = CATEGORIES.find(c => c.id === goldenCategory); return cat ? <cat.icon className="w-3.5 h-3.5 text-blue-500" /> : null })()}
+              <span className="text-blue-500 font-medium">{CATEGORIES.find(c => c.id === goldenCategory)?.label}</span>
             </p>
 
             {goldenError && <p className="text-red-500 text-sm">{goldenError}</p>}
@@ -3194,15 +3773,23 @@ function DashboardPageInner() {
               </div>
             ) : (
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <table className="w-full text-xs table-fixed">
-                  <thead>
-                    <tr className="text-[11px] text-gray-400 border-b border-gray-100 bg-gray-50">
-                      <th className="text-center px-4 py-3 font-medium w-[30%]">키워드</th>
-                      <th className="text-center px-3 py-3 font-medium w-[10%]">PC</th>
-                      <th className="text-center px-3 py-3 font-medium w-[10%]">모바일</th>
-                      <th className="text-center px-3 py-3 font-medium w-[10%]">블로그</th>
-                      <th className="text-center px-3 py-3 font-medium w-[14%]">경쟁강도</th>
-                      <th className="text-center px-3 py-3 font-medium w-[26%]">
+                <table className="w-full text-base table-fixed">
+                  <colgroup>
+                    <col style={{ width: '27%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '22%' }} />
+                  </colgroup>
+                  <thead className="bg-gray-50/60">
+                    <tr className="text-sm text-gray-400 border-b border-gray-100">
+                      <th className="text-left pt-3 pb-3 pl-5 font-medium">키워드</th>
+                      <th className="text-center pt-3 pb-3 font-medium">PC</th>
+                      <th className="text-center pt-3 pb-3 font-medium">모바일</th>
+                      <th className="text-center pt-3 pb-3 font-medium">블로그</th>
+                      <th className="text-center pt-3 pb-3 pr-3 font-medium">경쟁강도</th>
+                      <th className="text-center pt-3 pb-3 pr-5 pl-3 font-medium">
                         <span className="inline-flex items-center justify-center gap-1">
                           글쓰기
                           <span
@@ -3216,44 +3803,43 @@ function DashboardPageInner() {
                             }}
                             onMouseLeave={() => setWriteTooltipPos(null)}
                           >
-                            <Info className="w-3 h-3 text-gray-400" />
+                            <Info className="w-3.5 h-3.5 text-gray-400" />
                           </span>
                         </span>
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {goldenResults.map((kw, i) => (
+                    {goldenResults.map((kw) => (
                         <tr
                           key={kw.keyword}
-                          className="border-b border-gray-50 hover:bg-gray-50 transition-colors"
+                          className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors"
                         >
-                          <td className="px-4 py-3 font-medium text-gray-800">
+                          <td className="py-2.5 pl-5 pr-3 font-medium text-gray-800 truncate">
                             <span className="flex items-center gap-1.5">
                               {kw.keyword}
                               {(kw.trend_score ?? 0) >= 50 && (
                                 <span
-                                  className="inline-flex items-center gap-0.5 bg-orange-50 text-orange-500 px-1 py-px rounded-full font-medium shrink-0 cursor-default"
-                                  style={{fontSize:'9px'}}
+                                  className="inline-flex items-center gap-0.5 bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded-full text-[10px] font-medium shrink-0 cursor-default"
                                   onMouseEnter={e => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setTrendBadgeTooltipPos({ x: r.right + 8, y: r.top + r.height / 2 }) }}
                                   onMouseLeave={() => setTrendBadgeTooltipPos(null)}
                                 ><Flame className="w-2 h-2" /> 트렌드</span>
                               )}
                             </span>
                           </td>
-                          <td className="px-3 py-3 text-center text-gray-600">{kw.pc_volume.toLocaleString()}</td>
-                          <td className="px-3 py-3 text-center text-gray-600">{kw.mobile_volume.toLocaleString()}</td>
-                          <td className="px-3 py-3 text-center text-gray-600">{kw.blog_count?.toLocaleString() ?? '-'}</td>
-                          <td className="px-3 py-3">
-                            <div className="flex items-center justify-center gap-1 text-[11px] text-green-600 font-medium">
-                              <Circle className="w-2 h-2 text-green-500 shrink-0" fill="currentColor" />
-                              <span>{kw.competition_label}</span>
-                            </div>
+                          <td className="py-2.5 text-center text-gray-600">{kw.pc_volume.toLocaleString()}</td>
+                          <td className="py-2.5 text-center text-gray-600">{kw.mobile_volume.toLocaleString()}</td>
+                          <td className="py-2.5 text-center text-gray-600">{kw.blog_count?.toLocaleString() ?? '-'}</td>
+                          <td className="py-2.5 pr-3 text-center">
+                            <span className="inline-flex items-center gap-1 text-sm px-2.5 py-0.5 rounded-full font-medium bg-green-50 text-green-700">
+                              <Circle className="w-2 h-2 text-green-500" fill="currentColor" />
+                              {kw.competition_label}
+                            </span>
                           </td>
-                          <td className="px-3 py-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button onClick={() => startGoldenGuide(kw.keyword)} className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">검색형 <ChevronRight className="w-2.5 h-2.5" /></button>
-                              <button onClick={() => goToFeed(kw.keyword)} className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">노출형 <ChevronRight className="w-2.5 h-2.5" /></button>
+                          <td className="py-2.5 pr-5 pl-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button onClick={() => startGoldenGuide(kw.keyword)} className="text-sm px-2.5 py-0.5 rounded-md font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">검색형 <ChevronRight className="w-3 h-3" /></button>
+                              <button onClick={() => goToFeed(kw.keyword)} className="text-sm px-2.5 py-0.5 rounded-md font-semibold bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">노출형 <ChevronRight className="w-3 h-3" /></button>
                             </div>
                           </td>
                         </tr>
@@ -3265,12 +3851,13 @@ function DashboardPageInner() {
                     <button
                       onClick={loadMoreGolden}
                       disabled={goldenLoadingMore}
-                      className="px-6 py-2 bg-blue-400 text-white rounded-xl text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+                      className="px-6 py-2 bg-blue-500 text-white rounded-xl text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
                     >
                       {goldenLoadingMore ? '불러오는 중...' : '더보기'}
                     </button>
                   </div>
                 )}
+                <div className="h-3" />
               </div>
             )}
           </div>
@@ -3280,7 +3867,7 @@ function DashboardPageInner() {
         {mode === 'keyword-insight-input' && (
           <div>
             <h2 className="text-xl font-bold mb-2 pl-2">키워드 인사이트</h2>
-            <p className="text-gray-400 text-sm mb-6 pl-2">키워드 하나를 입력하면 검색량과 경쟁강도를 분석해드려요 (일 10회)</p>
+            <p className="text-gray-400 text-sm mb-6 pl-2">원하는 키워드 1개를 입력하면 검색량과 경쟁강도를 분석해드려요</p>
             <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">분석할 키워드</label>
@@ -3336,10 +3923,10 @@ function DashboardPageInner() {
                 <button
                   key={cat.id}
                   onClick={() => startTrend(cat.id)}
-                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md hover:bg-gray-50/70 p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
+                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md hover:bg-gray-50/70 p-6 rounded-2xl text-center transition-all group flex flex-col items-center"
                 >
-                  <cat.icon className={`w-6 h-6 mb-2 ${cat.color}`} />
-                  <p className="font-medium text-sm">{cat.label}</p>
+                  <cat.icon className={`w-8 h-8 mb-3 ${cat.color}`} />
+                  <p className="font-medium text-base">{cat.label}</p>
                 </button>
               ))}
             </div>
@@ -3373,28 +3960,42 @@ function DashboardPageInner() {
             <h2 className="text-xl font-bold pl-2">트렌드·이슈 글감 발굴</h2>
             <p className="text-gray-400 text-sm -mt-2 pl-2 flex items-center gap-1">
               카테고리:
-              {(() => { const cat = CATEGORIES.find(c => c.id === trendCategory); return cat ? <cat.icon className="w-3.5 h-3.5" /> : null })()}
-              <span className="text-gray-400 font-medium">{CATEGORIES.find(c => c.id === trendCategory)?.label}</span>
+              {(() => { const cat = CATEGORIES.find(c => c.id === trendCategory); return cat ? <cat.icon className="w-3.5 h-3.5 text-blue-500" /> : null })()}
+              <span className="text-blue-500 font-medium">{CATEGORIES.find(c => c.id === trendCategory)?.label}</span>
             </p>
 
             {issueError && <p className="text-red-500 text-sm">{issueError}</p>}
             {issueTitles.length > 0 ? (
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center">
-                  <span className="flex-1 text-xs font-medium text-gray-400 text-center">트렌드·이슈</span>
-                  <span className="shrink-0 w-36 text-xs font-medium text-gray-400 text-center">글쓰기</span>
+                <div className="grid grid-cols-[1fr_auto] items-center pt-3 pb-3 pl-5 pr-5 border-b border-gray-100 bg-gray-50/60">
+                  <span className="text-sm font-medium text-gray-400">트렌드·이슈</span>
+                  <span className="text-sm font-medium text-gray-400 w-40 text-center">
+                    <span className="inline-flex items-center justify-center gap-1">
+                      글쓰기
+                      <span
+                        className="cursor-default"
+                        onMouseEnter={(e) => {
+                          const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          setWriteTooltipPos({ x: r.right + 8, y: r.top + r.height / 2 })
+                        }}
+                        onMouseLeave={() => setWriteTooltipPos(null)}
+                      >
+                        <Info className="w-3.5 h-3.5 text-gray-400" />
+                      </span>
+                    </span>
+                  </span>
                 </div>
                 <ul className="divide-y divide-gray-50">
                   {(isPro ? issueTitles : issueTitles.slice(0, 8)).map((title, i) => (
-                    <li key={i} className="hover:bg-gray-50 transition-colors">
-                      <div className="px-4 py-3 flex items-center justify-between gap-3">
+                    <li key={i} className="hover:bg-gray-50/50 transition-colors">
+                      <div className="grid grid-cols-[1fr_auto] items-center gap-3 pl-5 pr-5 py-3">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
-                          <span className="text-sm text-gray-700 leading-snug">{title}</span>
+                          <span className="text-sm text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
+                          <span className="text-base text-gray-700 leading-snug">{title}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button onClick={() => goToWrite(title, [], 'trend')} className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-0.5">검색형 <ChevronRight className="w-3 h-3" /></button>
-                          <button onClick={() => goToFeed(title, 'trend')} className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center gap-0.5">노출형 <ChevronRight className="w-3 h-3" /></button>
+                        <div className="flex items-center gap-1.5 shrink-0 w-40 justify-center">
+                          <button onClick={() => goToWrite(title, [], 'trend')} className="text-sm px-2.5 py-0.5 rounded-md font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">검색형 <ChevronRight className="w-3 h-3" /></button>
+                          <button onClick={() => goToFeed(title, 'trend')} className="text-sm px-2.5 py-0.5 rounded-md font-semibold bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors flex items-center gap-0.5 whitespace-nowrap">노출형 <ChevronRight className="w-3 h-3" /></button>
                         </div>
                       </div>
                     </li>
@@ -3405,14 +4006,14 @@ function DashboardPageInner() {
                     <ul className="divide-y divide-gray-50 select-none pointer-events-none">
                       {issueTitles.slice(8, 14).map((title, i) => (
                         <li key={i}>
-                          <div className="px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="grid grid-cols-[1fr_auto] items-center gap-3 pl-5 pr-5 py-3">
                             <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 9).padStart(2, '0')}</span>
-                              <span className="text-sm text-gray-700 leading-snug">{title}</span>
+                              <span className="text-sm text-gray-300 font-medium shrink-0">#{String(i + 9).padStart(2, '0')}</span>
+                              <span className="text-base text-gray-700 leading-snug">{title}</span>
                             </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span className="text-xs px-3 py-1.5 rounded-lg font-medium bg-blue-50 text-blue-600 flex items-center gap-0.5">검색형 <ChevronRight className="w-3 h-3" /></span>
-                              <span className="text-xs px-3 py-1.5 rounded-lg font-medium bg-orange-50 text-orange-600 flex items-center gap-0.5">노출형 <ChevronRight className="w-3 h-3" /></span>
+                            <div className="flex items-center gap-1.5 shrink-0 w-40 justify-center">
+                              <span className="text-sm px-2.5 py-0.5 rounded-md font-semibold bg-blue-50 text-blue-600 flex items-center gap-0.5 whitespace-nowrap">검색형 <ChevronRight className="w-3 h-3" /></span>
+                              <span className="text-sm px-2.5 py-0.5 rounded-md font-semibold bg-orange-50 text-orange-600 flex items-center gap-0.5 whitespace-nowrap">노출형 <ChevronRight className="w-3 h-3" /></span>
                             </div>
                           </div>
                         </li>
@@ -3428,6 +4029,7 @@ function DashboardPageInner() {
                     </div>
                   </div>
                 )}
+                <div className="h-3" />
               </div>
             ) : !issueError && (
               <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
@@ -3449,10 +4051,10 @@ function DashboardPageInner() {
                 <button
                   key={cat.id}
                   onClick={() => startSearchTrend(cat.id)}
-                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md hover:bg-gray-50/70 p-4 rounded-2xl text-center transition-all group flex flex-col items-center"
+                  className="bg-white border border-gray-200 shadow-sm hover:-translate-y-1 hover:shadow-md hover:bg-gray-50/70 p-6 rounded-2xl text-center transition-all group flex flex-col items-center"
                 >
-                  <cat.icon className={`w-6 h-6 mb-2 ${cat.color}`} />
-                  <p className="font-medium text-sm">{cat.label}</p>
+                  <cat.icon className={`w-8 h-8 mb-3 ${cat.color}`} />
+                  <p className="font-medium text-base">{cat.label}</p>
                 </button>
               ))}
             </div>
@@ -3486,19 +4088,19 @@ function DashboardPageInner() {
             <h2 className="text-xl font-bold pl-2">검색 트렌드</h2>
             <p className="text-gray-400 text-sm -mt-2 pl-2 flex items-center gap-1">
               카테고리:
-              {(() => { const cat = CATEGORIES.find(c => c.id === searchTrendCategory); return cat ? <cat.icon className="w-3.5 h-3.5" /> : null })()}
-              <span className="text-gray-400 font-medium">{CATEGORIES.find(c => c.id === searchTrendCategory)?.label}</span>
+              {(() => { const cat = CATEGORIES.find(c => c.id === searchTrendCategory); return cat ? <cat.icon className="w-3.5 h-3.5 text-blue-500" /> : null })()}
+              <span className="text-blue-500 font-medium">{CATEGORIES.find(c => c.id === searchTrendCategory)?.label}</span>
             </p>
             {searchTrendError && <p className="text-red-500 text-sm">{searchTrendError}</p>}
             {searchTrendKeywords.length > 0 ? (
               <>
                 <div className="bg-white rounded-2xl shadow-sm overflow-hidden wordcloud-wrap">
-                  <style>{`.wordcloud-wrap text { cursor: pointer; transition: fill 0.15s; } .wordcloud-wrap text:hover { fill: #3b82f6 !important; }`}</style>
+                  <style>{`.wordcloud-wrap text { cursor: pointer; transition: fill 0.15s; font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important; } .wordcloud-wrap text:hover { fill: #3b82f6 !important; }`}</style>
                   <WordCloud
                     data={searchTrendKeywords.map(kw => ({ text: kw.keyword, value: Math.round(kw.ratio) }))}
                     width={560}
                     height={420}
-                    font="Pretendard, sans-serif"
+                    font="'Pretendard Variable', Pretendard, sans-serif"
                     fontWeight={(w: any) => w.value >= 65 ? 'bold' : w.value >= 35 ? '600' : '400'}
                     fontSize={(w: any) => Math.max(12, Math.round(w.value * 0.45))}
                     rotate={(w: any) => {
@@ -3517,28 +4119,29 @@ function DashboardPageInner() {
                   />
                 </div>
                 <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-400 pl-8">키워드</span>
-                    <span className="shrink-0 w-32 text-xs font-medium text-gray-400 text-center">트렌드 지수</span>
+                  <div className="grid grid-cols-[1fr_auto] items-center pt-3 pb-3 pl-5 pr-5 border-b border-gray-100 bg-gray-50/60">
+                    <span className="text-sm font-medium text-gray-400">키워드</span>
+                    <span className="text-sm font-medium text-gray-400 w-40 text-center">트렌드 지수</span>
                   </div>
                   <ul className="divide-y divide-gray-50">
                     {searchTrendKeywords.map((kw, i) => (
-                      <li key={kw.keyword}>
-                        <div className="px-4 py-3 flex items-center justify-between">
+                      <li key={kw.keyword} className="hover:bg-gray-50/50 transition-colors">
+                        <div className="grid grid-cols-[1fr_auto] items-center gap-3 pl-5 pr-5 py-3">
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
-                            <span className="text-sm text-gray-700 font-medium truncate">{kw.keyword}</span>
+                            <span className="text-sm text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
+                            <span className="text-base text-gray-700 font-medium truncate">{kw.keyword}</span>
                           </div>
-                          <div className="shrink-0 w-32 flex items-center justify-center gap-1.5">
-                            <span className="text-xs text-gray-500 font-medium">{Math.round(kw.ratio)}</span>
-                            {kw.ratio >= 80 && <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-medium">핫해요</span>}
-                            {kw.ratio >= 60 && kw.ratio < 80 && <span className="text-xs bg-orange-50 text-orange-500 px-2 py-0.5 rounded-full font-medium">상승 중</span>}
-                            {kw.ratio < 60 && <span className="text-xs bg-blue-50 text-blue-400 px-2 py-0.5 rounded-full font-medium">보통</span>}
+                          <div className="shrink-0 w-40 flex items-center justify-center gap-1.5">
+                            <span className="text-sm text-gray-500 font-medium">{Math.round(kw.ratio)}</span>
+                            {kw.ratio >= 80 && <span className="text-sm bg-red-50 text-red-500 px-2.5 py-0.5 rounded-full font-medium">핫해요</span>}
+                            {kw.ratio >= 60 && kw.ratio < 80 && <span className="text-sm bg-orange-50 text-orange-500 px-2.5 py-0.5 rounded-full font-medium">상승 중</span>}
+                            {kw.ratio < 60 && <span className="text-sm bg-blue-50 text-blue-500 px-2.5 py-0.5 rounded-full font-medium">보통</span>}
                           </div>
                         </div>
                       </li>
                     ))}
                   </ul>
+                  <div className="h-3" />
                 </div>
               </>
             ) : !searchTrendError && (
@@ -3599,28 +4202,42 @@ function DashboardPageInner() {
 
             {newsRankingItems.length > 0 ? (
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-5 pt-4 pb-3 border-b border-gray-50 flex items-center justify-between gap-3">
-                  <span className="flex-1 text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Newspaper className="w-3.5 h-3.5" /> 인기 뉴스 TOP {newsRankingItems.length}</span>
-                  <span className="shrink-0 w-[150px] text-xs font-medium text-gray-400 text-center">글쓰기</span>
+                <div className="grid grid-cols-[1fr_auto] items-center pt-3 pb-3 pl-5 pr-5 border-b border-gray-100 bg-gray-50/60">
+                  <span className="text-sm font-medium text-gray-400 flex items-center gap-1.5"><Newspaper className="w-3.5 h-3.5" /> 인기 뉴스 TOP {newsRankingItems.length}</span>
+                  <span className="text-sm font-medium text-gray-400 w-40 text-center">
+                    <span className="inline-flex items-center justify-center gap-1">
+                      글쓰기
+                      <span
+                        className="cursor-default"
+                        onMouseEnter={(e) => {
+                          const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          setWriteTooltipPos({ x: r.right + 8, y: r.top + r.height / 2 })
+                        }}
+                        onMouseLeave={() => setWriteTooltipPos(null)}
+                      >
+                        <Info className="w-3.5 h-3.5 text-gray-400" />
+                      </span>
+                    </span>
+                  </span>
                 </div>
                 <ul className="divide-y divide-gray-50">
                   {newsRankingItems.map((item, i) => (
-                    <li key={i} className="hover:bg-gray-50 transition-colors">
-                      <div className="px-4 py-3 flex items-center justify-between gap-3">
+                    <li key={i} className="hover:bg-gray-50/50 transition-colors">
+                      <div className="grid grid-cols-[1fr_auto] items-center gap-3 pl-5 pr-5 py-3">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-xs text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
-                          <span className="text-sm text-gray-700 leading-snug">{item.title}</span>
+                          <span className="text-sm text-gray-300 font-medium shrink-0">#{String(i + 1).padStart(2, '0')}</span>
+                          <span className="text-base text-gray-700 leading-snug">{item.title}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0 w-[150px] justify-end">
+                        <div className="flex items-center gap-1.5 shrink-0 w-40 justify-center">
                           <button
                             onClick={() => goToWrite(item.title, [])}
-                            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-0.5"
+                            className="text-sm px-2.5 py-0.5 rounded-md font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors flex items-center gap-0.5 whitespace-nowrap"
                           >
                             검색형 <ChevronRight className="w-3 h-3" />
                           </button>
                           <button
                             onClick={() => goToFeed(item.title)}
-                            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center gap-0.5"
+                            className="text-sm px-2.5 py-0.5 rounded-md font-semibold bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors flex items-center gap-0.5 whitespace-nowrap"
                           >
                             노출형 <ChevronRight className="w-3 h-3" />
                           </button>
@@ -3629,6 +4246,7 @@ function DashboardPageInner() {
                     </li>
                   ))}
                 </ul>
+                <div className="h-3" />
               </div>
             ) : !newsRankingError && (
               <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-400">
@@ -3716,6 +4334,422 @@ function DashboardPageInner() {
                 </ul>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ── 글 진단 input ── */}
+        {activeTab === 'diagnose' && mode === 'post-diagnose-input' && (
+          <div>
+            <h2 className="text-xl font-bold mb-2 pl-2">글 진단</h2>
+            <p className="text-gray-400 text-sm mb-6 pl-2">내 블로그 글 URL을 입력하면 노출 상태와 상위 글과의 차이를 분석해드려요</p>
+            <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">블로그 글 URL <span className="text-red-400">*</span></label>
+                <input type="text" value={diagnosePostUrl} onChange={e => setDiagnosePostUrl(e.target.value)}
+                  placeholder="예: https://blog.naver.com/myblog/123456789"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
+                <p className="text-xs text-gray-400 mt-1">네이버 블로그 글의 URL을 그대로 붙여넣어주세요</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">타겟 키워드 <span className="text-red-400">*</span></label>
+                <input type="text" value={diagnoseKeyword} onChange={e => setDiagnoseKeyword(e.target.value)}
+                  placeholder="예: 압구정 맛집"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
+                <p className="text-xs text-gray-400 mt-1">이 키워드로 검색했을 때의 순위를 확인해드려요</p>
+              </div>
+              {diagnoseError && <p className="text-sm text-red-500">{diagnoseError}</p>}
+              <button onClick={startPostDiagnose} disabled={!diagnosePostUrl.trim() || !diagnoseKeyword.trim()}
+                className="w-full py-3.5 bg-blue-500 text-white text-sm font-bold rounded-xl hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                진단 시작
+              </button>
+            </div>
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 mt-4">
+              <p className="text-sm font-semibold text-blue-700 mb-2">어떤 걸 분석하나요?</p>
+              <ul className="text-sm text-blue-700/80 space-y-1 leading-relaxed">
+                <li>· 입력한 글이 검색 결과에서 몇 위에 있는지</li>
+                <li>· 상위 1~3위 글의 글자수·사진 수·키워드 밀도 분석</li>
+                <li>· 내 글과 비교해서 어디를 보완해야 할지</li>
+                <li>· 룰 기반 인사이트 (AI 호출 없이 즉시)</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {/* ── 글 진단 loading ── */}
+        {activeTab === 'diagnose' && mode === 'post-diagnose-loading' && (
+          <div className="text-center py-20">
+            <div className="flex justify-center mb-6">
+              <div className="relative w-14 h-14">
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center"><BarChart2 className="w-5 h-5 text-blue-500" /></div>
+              </div>
+            </div>
+            <h2 className="text-xl font-bold mb-2">검색 순위 확인 중</h2>
+            <p className="text-gray-500 text-sm mb-1">실제 네이버 검색 결과를 분석하고 있어요 (약 10초)</p>
+            <div className="flex justify-center gap-1.5 mt-4">
+              <div className="w-2 h-2 bg-blue-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 글 진단 result (2단계 progressive) ── */}
+        {activeTab === 'diagnose' && mode === 'post-diagnose-result' && diagnoseQuick && (
+          <div className="space-y-6">
+            <button onClick={() => setMode('post-diagnose-input')} className="text-gray-400 text-sm hover:text-gray-600">← 다시 진단</button>
+
+            {/* 글 제목 (quick) */}
+            <div className="pl-2">
+              <h2 className="text-xl font-bold text-gray-900 line-clamp-2">{diagnoseQuick.matchedTitle || diagnoseFull?.myPost?.title || diagnoseKeyword || '글 진단 결과'}</h2>
+              <p className="text-xs text-gray-400 mt-1">키워드: {diagnoseQuick.keyword}</p>
+            </div>
+
+            {/* 순위 결과 — 큰 카드 (quick에서 즉시) */}
+            {diagnoseQuick.rank !== null ? (
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100/60 border border-blue-200 rounded-2xl p-8 text-center">
+                <p className="text-sm font-semibold text-blue-700 mb-2">현재 검색 순위</p>
+                <p className="text-6xl font-extrabold text-blue-600 mb-2 tracking-tight">{diagnoseQuick.rank}위</p>
+                <p className="text-sm text-blue-700">상위 30위 안에 있어요</p>
+              </div>
+            ) : (
+              <div className="bg-gradient-to-br from-red-50 to-orange-50 border border-red-100 rounded-2xl p-8 text-center">
+                <div className="flex justify-center mb-3">
+                  <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                    <AlertCircle className="w-6 h-6 text-red-500" />
+                  </div>
+                </div>
+                <p className="text-3xl font-extrabold text-red-600 mb-2 tracking-tight">상위 30위 밖</p>
+                <p className="text-sm text-red-700 leading-relaxed">검색 유입이 거의 없는 위치예요.<br />아래 보완점을 적용해보세요.</p>
+              </div>
+            )}
+
+            {/* 상위 글 미리보기 (quick) */}
+            {diagnoseQuick.topPosts.length > 0 && (
+              <div>
+                <h3 className="text-base font-bold text-gray-900 mb-3 pl-2">상위 {diagnoseQuick.topPosts.length}개 글</h3>
+                <div className="space-y-2">
+                  {diagnoseQuick.topPosts.map(p => (
+                    <a key={p.rank} href={p.url} target="_blank" rel="noreferrer" className="block bg-white rounded-xl p-4 shadow-sm hover:shadow transition-shadow">
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mb-1.5">
+                        <span className="bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full">{p.rank}위</span>
+                      </div>
+                      <p className="text-sm text-gray-800 font-medium line-clamp-2">{p.title}</p>
+                      {p.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{p.description}</p>}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ─── Pro 영역: 본문 분석 ─── */}
+            <div className="pt-6">
+              <div className="flex items-center gap-2 mb-3 pl-2">
+                <h3 className="text-base font-bold text-gray-900">상세 본문 분석</h3>
+                <span className="text-[10px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded-full">PRO</span>
+              </div>
+
+              {diagnoseFullLoading && (
+                <div className="bg-white rounded-2xl p-8 shadow-sm">
+                  <div className="flex flex-col items-center justify-center py-4">
+                    <div className="relative w-12 h-12 mb-4">
+                      <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
+                      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 animate-spin"></div>
+                      <div className="absolute inset-0 flex items-center justify-center"><BarChart2 className="w-4 h-4 text-blue-500" /></div>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-700 mb-1">상위 글들과 비교 분석 중이에요</p>
+                    <p className="text-xs text-gray-400">약 10초 정도 걸려요</p>
+                  </div>
+                </div>
+              )}
+
+              {diagnoseFullError && !diagnoseFullLoading && (
+                <div className="bg-red-50 border border-red-100 rounded-2xl p-5">
+                  <p className="text-sm text-red-700">{diagnoseFullError}</p>
+                </div>
+              )}
+
+              {diagnoseFull && !diagnoseFullLoading && (
+                <>
+                  {/* 인사이트 카드 */}
+                  <div className="mb-6">
+                    <div className="flex items-center mb-3 pl-2">
+                      <p className="text-sm font-semibold text-gray-700">개선 인사이트</p>
+                      {(() => {
+                        const badCount = diagnoseFull.insights.filter(i => i.level === 'critical' || i.level === 'warning').length
+                        if (badCount > 0) return <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">보완 필요 {badCount}건</span>
+                        return null
+                      })()}
+                    </div>
+                    <div className="space-y-2">
+                      {[...diagnoseFull.insights]
+                        .sort((a, b) => {
+                          const order = { critical: 0, warning: 1, tip: 2, good: 3 }
+                          return (order[a.level] ?? 9) - (order[b.level] ?? 9)
+                        })
+                        .map((ins, i) => {
+                          const colorMap = {
+                            critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', textBold: 'text-red-900', Icon: AlertCircle, scale: 'p-5' },
+                            warning:  { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', textBold: 'text-amber-900', Icon: AlertTriangle, scale: 'p-5' },
+                            tip:      { bg: 'bg-blue-50/40', border: 'border-blue-100', text: 'text-blue-700', textBold: 'text-blue-900', Icon: Lightbulb, scale: 'p-4' },
+                            good:     { bg: 'bg-gray-50', border: 'border-gray-100', text: 'text-gray-500', textBold: 'text-gray-600', Icon: CheckCircle2, scale: 'p-3.5' },
+                          } as const
+                          const c = colorMap[ins.level]
+                          const isBad = ins.level === 'critical' || ins.level === 'warning'
+                          return (
+                            <div key={i} className={`${c.bg} ${c.border} border rounded-xl ${c.scale} flex items-start gap-3`}>
+                              <c.Icon className={`shrink-0 ${isBad ? 'w-6 h-6' : 'w-4 h-4'} mt-0.5 ${c.text}`} />
+                              <p className={`${isBad ? 'text-base font-semibold' : 'text-sm'} ${c.textBold} leading-relaxed`}>{ins.message}</p>
+                            </div>
+                          )
+                        })}
+                    </div>
+                  </div>
+
+                  {/* 비교 표 */}
+                  {diagnoseFull.competitors.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700 mb-3 pl-2">상위 글들은 이렇게 작성하고 있어요</p>
+                      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-50 text-gray-500 text-xs">
+                              <th className="text-left px-4 py-3 font-medium">항목</th>
+                              <th className="text-right px-4 py-3 font-medium">내 글</th>
+                              {diagnoseFull.competitors.map(c => (
+                                <th key={c.rank} className="text-right px-4 py-3 font-medium">{c.rank}위</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="text-gray-700">
+                            <tr className="border-t border-gray-100">
+                              <td className="px-4 py-3 font-medium">글자수</td>
+                              <td className="text-right px-4 py-3 font-bold text-blue-600">{diagnoseFull.myPost.wordCount.toLocaleString()}</td>
+                              {diagnoseFull.competitors.map(c => (
+                                <td key={c.rank} className="text-right px-4 py-3">{c.wordCount.toLocaleString()}</td>
+                              ))}
+                            </tr>
+                            <tr className="border-t border-gray-100">
+                              <td className="px-4 py-3 font-medium">사진 수</td>
+                              <td className="text-right px-4 py-3 font-bold text-blue-600">{diagnoseFull.myPost.imageCount}</td>
+                              {diagnoseFull.competitors.map(c => (
+                                <td key={c.rank} className="text-right px-4 py-3">{c.imageCount}</td>
+                              ))}
+                            </tr>
+                            <tr className="border-t border-gray-100">
+                              <td className="px-4 py-3 font-medium">동영상</td>
+                              <td className="text-right px-4 py-3 font-bold text-blue-600">{diagnoseFull.myPost.videoCount}</td>
+                              {diagnoseFull.competitors.map(c => (
+                                <td key={c.rank} className="text-right px-4 py-3">{c.videoCount}</td>
+                              ))}
+                            </tr>
+                            <tr className="border-t border-gray-100">
+                              <td className="px-4 py-3 font-medium">키워드 밀도</td>
+                              <td className="text-right px-4 py-3 font-bold text-blue-600">{typeof diagnoseFull.myPost.keywordDensity === 'number' ? `${diagnoseFull.myPost.keywordDensity.toFixed(1)}%` : '-'}</td>
+                              {diagnoseFull.competitors.map(c => (
+                                <td key={c.rank} className="text-right px-4 py-3">{typeof c.keywordDensity === 'number' ? `${c.keywordDensity.toFixed(1)}%` : '-'}</td>
+                              ))}
+                            </tr>
+                            <tr className="border-t border-gray-100">
+                              <td className="px-4 py-3 font-medium">해시태그</td>
+                              <td className="text-right px-4 py-3 font-bold text-blue-600">{diagnoseFull.myPost.hashtags?.length || 0}</td>
+                              {diagnoseFull.competitors.map(c => (
+                                <td key={c.rank} className="text-right px-4 py-3">{c.hashtags?.length || 0}</td>
+                              ))}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── 순위 추적 list ── */}
+        {activeTab === 'diagnose' && mode === 'rank-track-list' && (
+          <div>
+            <div className="flex items-start justify-between mb-6 pl-2">
+              <div>
+                <h2 className="text-xl font-bold mb-2">순위 추적</h2>
+                <p className="text-gray-400 text-sm">
+                  키워드를 등록하면 매일 자동으로 순위 변화를 추적해드려요
+                  {trackedList.length > 0 && <span className="ml-2 text-xs">({trackedList.length}/{trackedLimit})</span>}
+                </p>
+              </div>
+              {trackedList.length > 0 && trackedList.length < trackedLimit && (
+                <button onClick={() => setMode('rank-track-add')}
+                  className="shrink-0 px-4 py-2.5 bg-blue-500 text-white text-sm font-bold rounded-xl hover:bg-blue-600 transition-colors flex items-center gap-1">
+                  <Plus className="w-4 h-4" /> 키워드 등록
+                </button>
+              )}
+            </div>
+
+            {trackedLoading && trackedList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                <p className="text-gray-500 text-sm">불러오는 중...</p>
+              </div>
+            ) : trackedList.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 shadow-sm text-center">
+                <div className="w-14 h-14 mx-auto bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
+                  <TrendingUp className="w-7 h-7 text-blue-500" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">아직 등록된 키워드가 없어요</h3>
+                <p className="text-sm text-gray-500 mb-6">추적하고 싶은 키워드와 내 블로그 URL을 등록하면<br />매일 새벽 자동으로 순위를 체크해드려요</p>
+                <button
+                  onClick={() => setMode('rank-track-add')}
+                  className="px-6 py-3 bg-blue-500 text-white text-sm font-bold rounded-xl hover:bg-blue-600 transition-colors"
+                >
+                  첫 키워드 등록하기
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {trackedList.map(k => (
+                  <div key={k.id} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow transition-shadow">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <button onClick={() => openRankDetail(k)} className="flex-1 text-left">
+                        <p className="text-base font-bold text-gray-900 mb-0.5">{k.keyword}</p>
+                        <p className="text-xs text-gray-400 truncate">{k.target_url}</p>
+                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-right">
+                          <p className="text-xs text-gray-400">현재 순위</p>
+                          {k.latestRank !== null ? (
+                            <p className="text-xl font-bold text-blue-600">{k.latestRank}위</p>
+                          ) : k.latestChecked ? (
+                            <p className="text-sm font-bold text-gray-400">30위 밖</p>
+                          ) : (
+                            <p className="text-sm font-medium text-gray-300">-</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
+                      <span className="text-xs text-gray-400">
+                        {k.latestChecked ? `최근 체크: ${new Date(k.latestChecked).toLocaleString('ko-KR')}` : '아직 체크 안 됨'}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => checkRankNow(k.id)} disabled={trackedLoading} className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50">
+                          지금 체크
+                        </button>
+                        <button onClick={() => deleteTrackedKeyword(k.id)} className="text-xs font-semibold text-gray-400 hover:text-red-500">
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 mt-4">
+              <p className="text-sm font-semibold text-blue-700 mb-2">무료 플랜 안내</p>
+              <ul className="text-sm text-blue-700/80 space-y-1 leading-relaxed">
+                <li>· 키워드 최대 {trackedLimit}개 등록 가능</li>
+                <li>· 매일 새벽 5시 자동 체크</li>
+                <li>· 최근 30일 순위 변화 기록</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {/* ── 순위 추적 add ── */}
+        {activeTab === 'diagnose' && mode === 'rank-track-add' && (
+          <div>
+            <button onClick={() => setMode('rank-track-list')} className="text-gray-400 text-sm hover:text-gray-600 mb-4 block">← 뒤로</button>
+            <h2 className="text-xl font-bold mb-2 pl-2">키워드 등록</h2>
+            <p className="text-gray-400 text-sm mb-6 pl-2">추적할 키워드와 내 블로그를 입력해주세요</p>
+            <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">키워드 <span className="text-red-400">*</span></label>
+                <input type="text" value={trackAddKeyword} onChange={e => setTrackAddKeyword(e.target.value)}
+                  placeholder="예: 압구정 맛집"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">내 블로그 URL <span className="text-red-400">*</span></label>
+                <input type="text" value={trackAddUrl} onChange={e => setTrackAddUrl(e.target.value)}
+                  placeholder="예: https://blog.naver.com/myblog 또는 글 URL"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl hover:border-gray-400 text-sm focus:outline-none focus:border-blue-500 placeholder:text-gray-300" />
+                <p className="text-xs text-gray-400 mt-1">블로그 주소 또는 특정 글 URL을 입력하세요</p>
+              </div>
+              {trackAddError && <p className="text-sm text-red-500">{trackAddError}</p>}
+              <button onClick={addTrackedKeyword} disabled={trackAddSaving || !trackAddKeyword.trim() || !trackAddUrl.trim()}
+                className="w-full py-3.5 bg-blue-500 text-white text-sm font-bold rounded-xl hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                {trackAddSaving ? '등록 중...' : '등록하고 추적 시작'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── 순위 추적 detail (시계열) ── */}
+        {activeTab === 'diagnose' && mode === 'rank-track-detail' && rankHistoryTracked && (
+          <div className="space-y-4">
+            <button onClick={() => { setRankHistoryTracked(null); setRankHistory(null); setMode('rank-track-list') }} className="text-gray-400 text-sm hover:text-gray-600">← 목록</button>
+
+            <div className="pl-2">
+              <h2 className="text-xl font-bold mb-2">{rankHistoryTracked.keyword}</h2>
+              <p className="text-gray-400 text-sm truncate">{rankHistoryTracked.target_url}</p>
+            </div>
+
+            {rankHistory === null ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : rankHistory.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 shadow-sm text-center">
+                <p className="text-sm text-gray-500">아직 기록이 없어요. "지금 체크"를 눌러 첫 데이터를 만들어보세요.</p>
+                <button
+                  onClick={() => checkRankNow(rankHistoryTracked.id)}
+                  className="mt-4 px-5 py-2.5 bg-blue-500 text-white text-sm font-bold rounded-xl hover:bg-blue-600 transition-colors"
+                >
+                  지금 체크
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* 간단한 텍스트 그래프 */}
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <p className="text-sm font-bold text-gray-900 mb-4">최근 30일 순위 변화</p>
+                  <div className="space-y-2">
+                    {rankHistory.slice().reverse().map((h, i) => (
+                      <div key={i} className="flex items-center gap-3 text-sm">
+                        <span className="text-xs text-gray-400 w-32 shrink-0">{new Date(h.checked_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className={`text-base font-bold w-16 ${h.rank !== null ? 'text-blue-600' : 'text-gray-400 text-sm'}`}>{h.rank !== null ? `${h.rank}위` : '30위 밖'}</span>
+                        <span className="text-xs text-gray-500 truncate flex-1">{h.matched_title || '제목 없음'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 상위 10 스냅샷 (가장 최근) */}
+                {rankHistory[rankHistory.length - 1]?.top10_snapshot?.length > 0 && (
+                  <div className="bg-white rounded-2xl p-5 shadow-sm">
+                    <p className="text-sm font-bold text-gray-900 mb-4">최근 체크 시점 — 상위 10개 글</p>
+                    <div className="space-y-2">
+                      {rankHistory[rankHistory.length - 1].top10_snapshot.map(p => (
+                        <a key={p.rank} href={p.url} target="_blank" rel="noreferrer" className="flex items-start gap-3 text-sm hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded transition-colors">
+                          <span className="text-xs font-bold text-blue-600 w-6 shrink-0">{p.rank}</span>
+                          <span className="text-gray-700 line-clamp-1">{p.title}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => checkRankNow(rankHistoryTracked.id)}
+                  className="w-full py-3 bg-blue-500 text-white text-sm font-bold rounded-xl hover:bg-blue-600 transition-colors"
+                >
+                  지금 다시 체크하기
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -3908,39 +4942,149 @@ function DashboardPageInner() {
             <h2 className="text-xl font-bold pl-2">키워드 인사이트</h2>
             <p className="text-gray-400 text-sm -mt-2 pl-2">키워드: <span className="text-blue-500 font-medium">{insightKeyword}</span></p>
 
-            {/* 트렌드 방향 + 계절성 */}
-            {(insightData.trendDirection || insightData.seasonality?.note) && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> 검색량 추이</p>
-                <div className="space-y-2">
-                  {insightData.trendDirection && (
-                    <p className={`text-sm font-medium ${
-                      insightData.trendDirection.direction === '상승' ? 'text-green-500' :
-                      insightData.trendDirection.direction === '하락' ? 'text-red-400' : 'text-gray-600'
-                    }`}>
-                      {insightData.trendDirection.direction === '상승' ? '검색량이 늘고 있어요' :
-                       insightData.trendDirection.direction === '하락' ? '검색량이 줄고 있어요' : '검색량이 꾸준해요'}
-                      {insightData.trendDirection.changeRate !== 0 && (
-                        <span className="text-xs ml-1 text-gray-400 font-normal">
-                          (지난주 대비 {Math.abs(insightData.trendDirection.changeRate)}% {insightData.trendDirection.changeRate > 0 ? '증가' : '감소'})
+            {/* 검색량 등급 → 트렌드 → 모바일/PC → 시즌 순 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <p className="text-sm font-semibold text-gray-800 mb-6 flex items-center gap-1.5"><TrendingUp className="w-4 h-4" /> 검색량 추이</p>
+              <div className="space-y-3">
+                {/* 1. 검색량 등급 — 뱃지는 월 검색수로 정보 추가 */}
+                {(() => {
+                  const v = insightData.main.totalVolume
+                  if (v <= 0) return null
+                  let color = 'bg-gray-100 text-gray-600'
+                  let msg = '마이너한 키워드예요'
+                  if (v >= 100000) { color = 'bg-purple-100 text-purple-700'; msg = '최상위 인기 키워드예요' }
+                  else if (v >= 10000) { color = 'bg-blue-100 text-blue-700'; msg = '인기 키워드예요' }
+                  else if (v >= 1000) { color = 'bg-gray-100 text-gray-700'; msg = '평이한 키워드예요' }
+                  return (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="w-1 h-1 rounded-full bg-gray-400 shrink-0" />
+                      <span className="text-base text-gray-800">{msg}</span>
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${color}`}>월 {v.toLocaleString()}회</span>
+                    </div>
+                  )
+                })()}
+                {/* 2. 트렌드 방향 — 유지(0%)는 뱃지 숨김 */}
+                {insightData.trendDirection && (() => {
+                  const d = insightData.trendDirection
+                  const isMeaningful = d.direction !== '유지' && d.changeRate !== 0
+                  const color = d.direction === '상승' ? 'bg-green-100 text-green-700' :
+                                d.direction === '하락' ? 'bg-red-100 text-red-700' : ''
+                  const arrow = d.direction === '상승' ? '↑' : '↓'
+                  return (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="w-1 h-1 rounded-full bg-gray-400 shrink-0" />
+                      <span className="text-base text-gray-800">
+                        {d.direction === '상승' ? '지난주 대비 검색량이 늘고 있어요' :
+                         d.direction === '하락' ? '지난주 대비 검색량이 줄고 있어요' : '검색량이 꾸준해요'}
+                      </span>
+                      {isMeaningful && (
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${color}`}>
+                          {arrow} {Math.abs(d.changeRate)}%
                         </span>
                       )}
-                    </p>
-                  )}
-                  {insightData.seasonality?.note && (
-                    <p className="text-sm text-yellow-600 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {insightData.seasonality.note}</p>
-                  )}
-                </div>
+                    </div>
+                  )
+                })()}
+                {/* 3. 모바일/PC */}
+                {(() => {
+                  const m = insightData.main.mobileVolume
+                  const p = insightData.main.pcVolume
+                  const t = m + p
+                  if (t === 0) return null
+                  const mobileRatio = Math.round((m / t) * 100)
+                  let msg = ''
+                  if (mobileRatio >= 80) msg = '주로 모바일에서 검색돼요'
+                  else if (mobileRatio >= 60) msg = '모바일 검색이 더 많아요'
+                  else if (mobileRatio >= 40) msg = '모바일과 PC가 비슷해요'
+                  else if (mobileRatio >= 20) msg = 'PC 검색이 더 많아요'
+                  else msg = '주로 PC에서 검색돼요'
+                  return (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="w-1 h-1 rounded-full bg-gray-400 shrink-0" />
+                      <span className="text-base text-gray-800">{msg}</span>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">모바일 {mobileRatio}% / PC {100 - mobileRatio}%</span>
+                    </div>
+                  )
+                })()}
+                {/* 4. 시즌 */}
+                {insightData.seasonality?.note && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="w-1 h-1 rounded-full bg-gray-400 shrink-0" />
+                    <span className="text-base text-gray-800">{insightData.seasonality.note}</span>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
 
             <InsightTable title="메인 키워드" icon="chart" items={[insightData.main]} />
             {insightData.autocomplete.length > 0 && (
-              <InsightTable title={`자동완성 키워드 (${insightData.autocomplete.length}개)`} icon="pencil" items={insightData.autocomplete} />
+              <InsightTable
+                title={`자동완성 키워드 (${insightData.autocomplete.length}개)`}
+                icon="pencil"
+                items={insightData.autocomplete}
+                toggle={{ active: highlightLowCompetition, onChange: setHighlightLowCompetition }}
+              />
             )}
             {insightData.related.length > 0 && (
-              <InsightTable title={`연관 키워드 (${insightData.related.length}개)`} icon="link" items={insightData.related} />
+              <InsightTable
+                title={`연관 키워드 (${insightData.related.length}개)`}
+                icon="link"
+                items={insightData.related}
+                toggle={{ active: highlightLowCompetition, onChange: setHighlightLowCompetition }}
+              />
             )}
+
+            {/* 글쓰기 CTA — 키워드 자동 입력 */}
+            <div className="pt-4 pb-12">
+              <p className="text-base font-bold text-gray-900 mb-1 pl-2">
+                <span className="text-blue-500">"{insightKeyword}"</span> 키워드로 글쓰러 가볼까요?
+              </p>
+              <p className="text-sm text-gray-400 mb-4 pl-2">분석한 키워드로 바로 글쓰기 시작하세요</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={() => {
+                    setActiveTab('prompt')
+                    setPromptSubTab('search')
+                    setTopic(insightKeyword)
+                    setKeywords([insightKeyword])
+                    setMode('write-input')
+                  }}
+                  className="group text-left bg-white border border-gray-200 rounded-2xl p-5 hover:border-blue-400 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                      <Search className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <p className="text-base font-bold text-gray-900">검색형 글쓰기</p>
+                  </div>
+                  <p className="text-sm text-gray-500 leading-relaxed mb-3">검색 결과 상단을 노려요</p>
+                  <div className="text-sm font-semibold text-blue-500 group-hover:text-blue-600 flex items-center gap-1">
+                    시작하기 <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab('prompt')
+                    setPromptSubTab('feed')
+                    setFeedOrigin('tab')
+                    setFeedTopic(insightKeyword)
+                    setMode('feed-input')
+                  }}
+                  className="group text-left bg-white border border-gray-200 rounded-2xl p-5 hover:border-orange-400 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center">
+                      <Smartphone className="w-5 h-5 text-orange-500" />
+                    </div>
+                    <p className="text-base font-bold text-gray-900">노출형 글쓰기</p>
+                  </div>
+                  <p className="text-sm text-gray-500 leading-relaxed mb-3">홈피드 추천을 노려요</p>
+                  <div className="text-sm font-semibold text-orange-500 group-hover:text-orange-600 flex items-center gap-1">
+                    시작하기 <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -4059,42 +5203,73 @@ function competitionClass(color: string) {
   return 'text-gray-500 bg-gray-50'
 }
 
-function InsightTable({ title, icon, items }: { title: string; icon?: 'chart' | 'pencil' | 'link'; items: InsightKeywordItem[] }) {
+function InsightTable({ title, icon, items, toggle }: {
+  title: string
+  icon?: 'chart' | 'pencil' | 'link'
+  items: InsightKeywordItem[]
+  toggle?: { active: boolean; onChange: (v: boolean) => void; label?: string }
+}) {
   const Icon = icon === 'pencil' ? Pencil : icon === 'link' ? Link2 : BarChart2
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm">
-      <p className="text-xs font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><Icon className="w-3.5 h-3.5" /> {title}</p>
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      {/* 헤더: 타이틀 + 토글 (토글의 '드' 위치가 경쟁강도 컬럼 '도'와 우측 정렬) */}
+      <div className="grid grid-cols-[32%_17%_17%_17%_17%] items-center pt-5 pb-6 gap-0">
+        <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5 col-span-4 pl-5"><Icon className="w-4 h-4" /> {title}</p>
+        {toggle ? (
+          <div className="flex items-center gap-2 justify-end pr-5">
+            <button
+              onClick={() => toggle.onChange(!toggle.active)}
+              className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${toggle.active ? 'bg-blue-500' : 'bg-gray-300'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${toggle.active ? 'translate-x-4' : 'translate-x-0'}`} />
+            </button>
+            <span className="text-xs text-gray-500">{toggle.label || '황금키워드'}</span>
+          </div>
+        ) : <div />}
+      </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-base table-fixed">
+          <colgroup>
+            <col style={{ width: '32%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '17%' }} />
+          </colgroup>
           <thead>
-            <tr className="text-xs text-gray-400 border-b border-gray-100">
-              <th className="text-left pb-2 font-medium">키워드</th>
-              <th className="text-right pb-2 font-medium">PC</th>
-              <th className="text-right pb-2 font-medium">모바일</th>
-              <th className="text-right pb-2 font-medium">블로그</th>
-              <th className="text-center pb-2 font-medium">경쟁강도</th>
+            <tr className="text-sm text-gray-400 border-b border-gray-100">
+              <th className="text-left pb-2 pl-5 font-medium">키워드</th>
+              <th className="text-center pb-2 font-medium">PC</th>
+              <th className="text-center pb-2 font-medium">모바일</th>
+              <th className="text-center pb-2 font-medium">블로그</th>
+              <th className="text-center pb-2 pr-5 font-medium">경쟁강도</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item, i) => (
-              <tr key={i} className="border-b border-gray-50 last:border-0">
-                <td className="py-2.5 pr-3 font-medium text-gray-800 max-w-[140px] truncate">{item.keyword}</td>
-                <td className="py-2.5 text-right text-gray-600">{item.pcVolume.toLocaleString()}</td>
-                <td className="py-2.5 text-right text-gray-600">{item.mobileVolume.toLocaleString()}</td>
-                <td className="py-2.5 text-right text-gray-600">
-                  {item.blogCount !== null ? item.blogCount.toLocaleString() : '-'}
-                </td>
-                <td className="py-2.5 text-center">
-                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${competitionClass(item.competition.color)}`}>
-                    <Circle className={`w-2 h-2 ${item.competition.color === 'green' ? 'text-green-500' : item.competition.color === 'yellow' ? 'text-yellow-400' : item.competition.color === 'orange' ? 'text-orange-400' : 'text-red-400'}`} fill="currentColor" />
-                    {item.competition.label}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {items.map((item, i) => {
+              const isLowComp = item.competition.color === 'green'
+              const rowHighlight = toggle?.active && isLowComp ? 'bg-blue-50/60' : ''
+              return (
+                <tr key={i} className={`border-b border-gray-50 last:border-0 ${rowHighlight}`}>
+                  <td className="py-2.5 pl-5 pr-3 font-medium text-gray-800 truncate">{item.keyword}</td>
+                  <td className="py-2.5 text-center text-gray-600">{item.pcVolume.toLocaleString()}</td>
+                  <td className="py-2.5 text-center text-gray-600">{item.mobileVolume.toLocaleString()}</td>
+                  <td className="py-2.5 text-center text-gray-600">
+                    {item.blogCount !== null ? item.blogCount.toLocaleString() : '-'}
+                  </td>
+                  <td className="py-2.5 pr-5 text-center">
+                    <span className={`inline-flex items-center gap-1 text-sm px-2.5 py-0.5 rounded-full font-medium ${competitionClass(item.competition.color)}`}>
+                      <Circle className={`w-2 h-2 ${item.competition.color === 'green' ? 'text-green-500' : item.competition.color === 'yellow' ? 'text-yellow-400' : item.competition.color === 'orange' ? 'text-orange-400' : item.competition.color === 'red' ? 'text-red-400' : 'text-gray-500'}`} fill="currentColor" />
+                      {item.competition.label}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
+      <div className="h-3" />
     </div>
   )
 }

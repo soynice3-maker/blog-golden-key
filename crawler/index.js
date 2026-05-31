@@ -39,6 +39,7 @@ function cleanHashtags(tags) {
 const crawlCache = new Map()
 const TTL_SHORTENTS = 4 * 60 * 60 * 1000  // 4시간
 const TTL_NEWS      = 1 * 60 * 60 * 1000  // 1시간
+const TTL_ANALYSIS  = 24 * 60 * 60 * 1000  // 24시간 (상위노출 분석 결과)
 
 function getCached(key) {
   const entry = crawlCache.get(key)
@@ -260,6 +261,14 @@ app.get('/analyze-top-posts', async (req, res) => {
   const keyword = req.query.keyword
   if (!keyword) return res.json({ error: '키워드 없음' })
 
+  // 캐시 적중 시 즉시 반환
+  const cacheKey = `analysis:${keyword}`
+  const cached = getCached(cacheKey)
+  if (cached) {
+    console.log('[cache hit]', cacheKey)
+    return res.json({ ...cached, cached: true })
+  }
+
   const browser = await browserPool.acquire()
   let context
   let crashed = false
@@ -307,12 +316,15 @@ app.get('/analyze-top-posts', async (req, res) => {
         const seen = new Set()
         const links = Array.from(container.querySelectorAll('a'))
           .filter(a => isRealPost(a.href))
+          // 메인 타이틀 링크만 — headline 클래스 가진 텍스트 자손이 있어야 함
+          // (인라인 연관글 링크는 body2 typography를 씀)
+          .filter(a => !!a.querySelector('[class*="sds-comps-text-type-headline"]'))
           .filter(a => {
             if (seen.has(a.href)) return false
             seen.add(a.href)
             return true
           })
-          .slice(0, 3)
+          .slice(0, 10)
           .map(a => ({
             title: a.getAttribute('title') || a.textContent?.trim().slice(0, 100),
             href: a.href,
@@ -324,40 +336,50 @@ app.get('/analyze-top-posts', async (req, res) => {
         }
       })
 
-      if (results.smartBlocks.length === 0) {
-        const allLinks = Array.from(document.querySelectorAll('a'))
-        const seen = new Set()
-        results.regularLinks = allLinks
-          .filter(a => isRealPost(a.href))
-          .filter(a => {
-            if (seen.has(a.href)) return false
-            seen.add(a.href)
-            return true
-          })
-          .slice(0, 3)
-          .map(a => ({
-            title: a.textContent?.trim().slice(0, 100),
-            href: a.href,
-            type: a.href.includes('in.naver.com') ? 'influencer' : 'blog'
-          }))
-      }
+      // 스마트블록 외 일반 블로그 검색 결과도 수집 (보충용)
+      const smartBlockHrefs = new Set()
+      results.smartBlocks.forEach(b => b.links.forEach(l => smartBlockHrefs.add(l.href)))
+      const allLinks = Array.from(document.querySelectorAll('a'))
+      const seen = new Set(smartBlockHrefs)
+      results.regularLinks = allLinks
+        .filter(a => isRealPost(a.href))
+        // 메인 타이틀 링크만 — headline 클래스 자손 보유
+        .filter(a => !!a.querySelector('[class*="sds-comps-text-type-headline"]'))
+        .filter(a => {
+          if (seen.has(a.href)) return false
+          seen.add(a.href)
+          return true
+        })
+        .slice(0, 10)
+        .map(a => ({
+          title: a.getAttribute('title') || a.textContent?.trim().slice(0, 100),
+          href: a.href,
+          type: a.href.includes('in.naver.com') ? 'influencer' : 'blog'
+        }))
 
       return results
     })
 
     await page.close()
-    console.log('스마트블록:', searchData.smartBlocks.map(b => `${b.blockName}(${b.links.length}개)`))
+    const regularLinks = searchData.regularLinks || []
+    console.log('스마트블록:', searchData.smartBlocks.map(b => `${b.blockName}(${b.links.length}개)`), regularLinks.length > 0 ? `+ 통합검색(${regularLinks.length}개)` : '')
 
     const allTitles = []
     searchData.smartBlocks.forEach(block => {
       block.links.forEach(link => {
-        allTitles.push({ title: link.title, blockName: block.blockName, type: link.type })
+        allTitles.push({ title: link.title, blockName: block.blockName, type: link.type, href: link.href })
       })
     })
+    // 스마트블록만으로 5개가 안 차면 일반 블로그 검색결과로 보충
+    // (스마트블록 0개일 땐 전부 통합검색 fallback)
+    regularLinks.forEach(link => {
+      allTitles.push({ title: link.title, blockName: '통합검색', type: link.type, href: link.href })
+    })
 
-    const representativeLinks = searchData.smartBlocks
-      .map(block => ({ ...block.links[0], blockName: block.blockName }))
-      .filter(link => link && link.href)
+    // 본문 크롤은 allTitles 상위 3개 (스마트블록 1위들 우선, 부족하면 일반 결과 보충)
+    const representativeLinks = allTitles.slice(0, 3).map(t => ({
+      title: t.title, href: t.href, type: t.type, blockName: t.blockName
+    }))
 
     // 병렬 크롤링
     const posts = await Promise.all(representativeLinks.map(link => scrapePost(context, link)))
@@ -383,14 +405,16 @@ app.get('/analyze-top-posts', async (req, res) => {
       .slice(0, 20)
       .map(([tag, count]) => ({ tag, count }))
 
-    res.json({
+    const result = {
       keyword,
       smartBlocks: searchData.smartBlocks.map(b => b.blockName),
       allTitles,
       posts: validPosts,
       average,
       topHashtags
-    })
+    }
+    setCached(cacheKey, result, TTL_ANALYSIS)
+    res.json(result)
   } catch (e) {
     crashed = true
     if (context) try { await context.close() } catch {}
@@ -801,6 +825,280 @@ app.get('/news-ranking', async (req, res) => {
     if (context) try { await context.close() } catch {}
     res.json({ items: [], error: e.message })
   } finally {
+    await browserPool.release(browser, crashed)
+  }
+})
+
+// ─────────────────────────────────────────────────────
+// 차단 방지: User-Agent 로테이션 + 랜덤 지연
+// ─────────────────────────────────────────────────────
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+]
+function pickUA() { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)] }
+function randomDelay(min = 1500, max = 3500) {
+  const ms = Math.floor(Math.random() * (max - min)) + min
+  return new Promise(r => setTimeout(r, ms))
+}
+
+// 블로그 URL 정규화 (쿼리/슬래시 제거)
+function normalizeBlogUrl(url) {
+  if (!url) return ''
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`)
+    const host = u.host.replace(/^www\./, '')
+    const path = u.pathname.replace(/\/+$/, '')
+    return `${host}${path}`.toLowerCase()
+  } catch { return url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '') }
+}
+function matchesBlogUrl(searchResultHref, targetUrl) {
+  const a = normalizeBlogUrl(searchResultHref)
+  const b = normalizeBlogUrl(targetUrl)
+  if (!a || !b) return false
+  // 특정 글까지 정확히 일치 또는 블로그 ID 일치 (글 단위 추적도 가능)
+  return a === b || a.startsWith(b + '/') || b.startsWith(a + '/')
+}
+
+// ─────────────────────────────────────────────────────
+// /track-rank — 키워드 검색 → 타겟 URL이 몇 위인지
+// ─────────────────────────────────────────────────────
+app.post('/track-rank', async (req, res) => {
+  const { keyword, targetUrl } = req.body
+  if (!keyword || !targetUrl) return res.status(400).json({ error: 'keyword/targetUrl 필요' })
+
+  const browser = await browserPool.acquire()
+  let context, crashed = false
+  try {
+    context = await browser.newContext({ userAgent: pickUA(), locale: 'ko-KR' })
+    await randomDelay(500, 1500)
+    const page = await context.newPage()
+    await page.goto(
+      `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(keyword)}`,
+      { waitUntil: 'domcontentloaded', timeout: 15000 }
+    )
+    try { await page.waitForSelector('#main_pack', { timeout: 5000 }) } catch { await page.waitForTimeout(1500) }
+
+    const links = await page.evaluate(() => {
+      const isRealPost = (href) => /blog\.naver\.com\/[^/?]+\/\d+/.test(href) || /in\.naver\.com\/[^/?]+\/contents\/internal\/\d+/.test(href)
+      const seen = new Set()
+      const collected = []
+      document.querySelectorAll('a').forEach(a => {
+        const href = a.href
+        if (!isRealPost(href) || seen.has(href)) return
+        seen.add(href)
+        const title = a.textContent?.trim() || ''
+        if (title.length < 5) return
+        collected.push({ href, title })
+      })
+      return collected.slice(0, 30)
+    })
+
+    let rank = null
+    let matchedTitle = null
+    links.forEach((l, idx) => {
+      if (rank === null && matchesBlogUrl(l.href, targetUrl)) {
+        rank = idx + 1
+        matchedTitle = l.title
+      }
+    })
+
+    res.json({
+      keyword, targetUrl, rank, matchedTitle,
+      checkedAt: new Date().toISOString(),
+      top10: links.slice(0, 10).map((l, i) => ({ rank: i + 1, title: l.title, url: l.href })),
+    })
+  } catch (e) {
+    crashed = true
+    if (context) try { await context.close() } catch {}
+    res.json({ error: e.message })
+  } finally {
+    if (context && !crashed) try { await context.close() } catch {}
+    await browserPool.release(browser, crashed)
+  }
+})
+
+// ─────────────────────────────────────────────────────
+// /analyze-post — 블로그 글 분석 (글자수/사진수/키워드밀도)
+// ─────────────────────────────────────────────────────
+async function analyzeNaverPost(context, postUrl) {
+  const page = await context.newPage()
+  try {
+    await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
+    try { await page.waitForSelector('iframe#mainFrame, .se-main-container', { timeout: 4000 }) } catch { await page.waitForTimeout(1200) }
+
+    const iframeSrc = await page.evaluate(() => {
+      const iframe = document.querySelector('iframe#mainFrame')
+      return iframe ? iframe.src : null
+    })
+    if (iframeSrc) {
+      await page.goto(iframeSrc, { waitUntil: 'domcontentloaded', timeout: 15000 })
+      try { await page.waitForSelector('.se-main-container, #postViewArea', { timeout: 4000 }) } catch { await page.waitForTimeout(1200) }
+    }
+
+    const data = await page.evaluate(() => {
+      const selectors = ['.se-main-container', '#postViewArea', '.post-view', '.blog_body']
+      let container = null
+      for (const s of selectors) { container = document.querySelector(s); if (container) break }
+      if (!container) return null
+
+      const title = document.querySelector('.se-title-text, .pcol1 .title, h3.tit_h3')?.textContent?.trim() || document.title
+
+      const imgs = container.querySelectorAll('img').length
+      const videos = container.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="naver"]').length
+      const text = container.innerText || container.textContent || ''
+      const cleanText = text.replace(/\s+/g, ' ').trim()
+      const wordCount = cleanText.length
+
+      // 해시태그 — 여러 셀렉터 + #으로 시작하는 텍스트 폴백
+      const hashtagSet = new Set()
+      const selectorsForTags = [
+        '.post_tag a',
+        '.ell .tag',
+        '.se-hashtag',
+        '.wrap_tag a',
+        '.tag_area a',
+        '.tag_box a',
+        'a[href*="hashtag"]',
+        'a[class*="hashtag"]',
+        'a[class*="tag_"]',
+        '.tag_list a',
+        '.tagTrans',
+      ]
+      selectorsForTags.forEach(sel => {
+        document.querySelectorAll(sel).forEach(t => {
+          const txt = (t.textContent || '').trim().replace(/^#/, '').trim()
+          if (txt && txt.length >= 2 && txt.length <= 30 && !/\s/.test(txt)) {
+            hashtagSet.add(txt)
+          }
+        })
+      })
+      // 폴백: 글 끝부분에서 #XXX #YYY 패턴 찾기 (마지막 1000자 안에서)
+      if (hashtagSet.size === 0) {
+        const tail = cleanText.slice(-1500)
+        const matches = tail.match(/#[가-힣A-Za-z0-9_]{2,30}/g) || []
+        matches.forEach(m => hashtagSet.add(m.replace(/^#/, '')))
+      }
+      const hashtags = Array.from(hashtagSet)
+
+      return { title, wordCount, imageCount: imgs, videoCount: videos, text: cleanText.slice(0, 5000), hashtags }
+    })
+    return data
+  } finally {
+    try { await page.close() } catch {}
+  }
+}
+
+function calcKeywordDensity(text, keyword) {
+  if (!text || !keyword) return 0
+  const k = keyword.replace(/\s+/g, '').toLowerCase()
+  const t = text.replace(/\s+/g, '').toLowerCase()
+  if (k.length === 0 || t.length === 0) return 0
+  const matches = (t.match(new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length
+  return matches / Math.ceil(t.length / k.length) * 100
+}
+
+app.post('/analyze-post', async (req, res) => {
+  const { url, keyword } = req.body
+  if (!url) return res.status(400).json({ error: 'url 필요' })
+
+  const browser = await browserPool.acquire()
+  let context, crashed = false
+  try {
+    context = await browser.newContext({ userAgent: pickUA(), locale: 'ko-KR' })
+    await randomDelay(500, 1500)
+    const data = await analyzeNaverPost(context, url)
+    if (!data) return res.json({ error: '글 분석 실패 (본문 영역을 찾을 수 없음)' })
+
+    const density = keyword ? calcKeywordDensity(data.text, keyword) : null
+    res.json({
+      url, keyword,
+      title: data.title,
+      wordCount: data.wordCount,
+      imageCount: data.imageCount,
+      videoCount: data.videoCount,
+      hashtags: data.hashtags,
+      keywordDensity: density,
+      text: data.text,  // 본문 앞부분 (인사이트 분석용)
+    })
+  } catch (e) {
+    crashed = true
+    if (context) try { await context.close() } catch {}
+    res.json({ error: e.message })
+  } finally {
+    if (context && !crashed) try { await context.close() } catch {}
+    await browserPool.release(browser, crashed)
+  }
+})
+
+// ─────────────────────────────────────────────────────
+// /analyze-competitors — 키워드 → 상위 N개 글 분석 (글 진단용)
+// ─────────────────────────────────────────────────────
+app.post('/analyze-competitors', async (req, res) => {
+  const { keyword, topN = 3 } = req.body
+  if (!keyword) return res.status(400).json({ error: 'keyword 필요' })
+
+  const browser = await browserPool.acquire()
+  let context, crashed = false
+  try {
+    context = await browser.newContext({ userAgent: pickUA(), locale: 'ko-KR' })
+    await randomDelay(500, 1500)
+    const page = await context.newPage()
+    await page.goto(
+      `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(keyword)}`,
+      { waitUntil: 'domcontentloaded', timeout: 15000 }
+    )
+    try { await page.waitForSelector('#main_pack', { timeout: 5000 }) } catch { await page.waitForTimeout(1500) }
+
+    const topPosts = await page.evaluate(() => {
+      const isRealPost = (href) => /blog\.naver\.com\/[^/?]+\/\d+/.test(href) || /in\.naver\.com\/[^/?]+\/contents\/internal\/\d+/.test(href)
+      const seen = new Set()
+      const collected = []
+      document.querySelectorAll('a').forEach(a => {
+        const href = a.href
+        if (!isRealPost(href) || seen.has(href)) return
+        seen.add(href)
+        const title = a.textContent?.trim() || ''
+        if (title.length < 5) return
+        collected.push({ href, title })
+      })
+      return collected.slice(0, 10)
+    })
+    await page.close()
+
+    const limit = Math.min(topN, topPosts.length)
+    const results = []
+    for (let i = 0; i < limit; i++) {
+      try {
+        await randomDelay(2000, 4500)
+        const data = await analyzeNaverPost(context, topPosts[i].href)
+        if (data) {
+          results.push({
+            rank: i + 1,
+            url: topPosts[i].href,
+            title: data.title || topPosts[i].title,
+            wordCount: data.wordCount,
+            imageCount: data.imageCount,
+            videoCount: data.videoCount,
+            hashtags: data.hashtags,
+            keywordDensity: calcKeywordDensity(data.text, keyword),
+          })
+        }
+      } catch (e) {
+        console.error(`상위 ${i + 1}위 분석 실패:`, e.message)
+      }
+    }
+
+    res.json({ keyword, topPosts: results, checkedAt: new Date().toISOString() })
+  } catch (e) {
+    crashed = true
+    if (context) try { await context.close() } catch {}
+    res.json({ error: e.message })
+  } finally {
+    if (context && !crashed) try { await context.close() } catch {}
     await browserPool.release(browser, crashed)
   }
 })

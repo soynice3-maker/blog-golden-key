@@ -3,7 +3,7 @@ import "./globals.css";
 import { SessionGuard } from "@/components/SessionGuard";
 
 export const metadata: Metadata = {
-  title: "블로그황금키",
+  title: "키라이즈",
   description: "블로그 상위노출 최적화 도구",
 };
 

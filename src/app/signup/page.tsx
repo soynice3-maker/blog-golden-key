@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { Key } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 
 const DOMAINS = ['naver.com', 'daum.net', 'nate.com', 'gmail.com', 'direct']
 const DOMAIN_LABELS: Record<string, string> = {
@@ -239,7 +239,7 @@ export default function SignupPage() {
         </button>
       </div>
       <Link href="/" className="mb-6 block text-center">
-        <div className="text-2xl font-bold text-gray-900 flex items-center gap-1.5">블로그황금키 <Key className="w-6 h-6 text-yellow-400" /></div>
+        <div className="text-2xl font-bold text-gray-900 flex items-center gap-1.5">키라이즈 <TrendingUp className="w-6 h-6 text-blue-500" /></div>
       </Link>
 
       <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-sm px-8 py-8 shadow-sm">

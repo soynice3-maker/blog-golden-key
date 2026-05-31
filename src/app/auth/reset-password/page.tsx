@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { TrendingUp } from 'lucide-react'
 
 function validatePassword(pw: string): string {
   if (!pw) return ''
@@ -77,7 +78,7 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center px-4">
       <Link href="/" className="mb-8 text-center block">
-        <div className="text-2xl font-bold text-gray-900">블로그황금키 🔑</div>
+        <div className="text-2xl font-bold text-gray-900 flex items-center justify-center gap-1.5">키라이즈 <TrendingUp className="w-5 h-5 text-blue-500" /></div>
       </Link>
 
       <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-sm px-8 py-8 shadow-sm">

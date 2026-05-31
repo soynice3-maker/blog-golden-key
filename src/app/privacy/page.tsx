@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import { Key, ChevronLeft } from 'lucide-react'
+import { TrendingUp, ChevronLeft } from 'lucide-react'
 
 export const metadata = {
-  title: '개인정보처리방침 | 블로그황금키',
+  title: '개인정보처리방침 | 키라이즈',
 }
 
 export default function PrivacyPage() {
@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <header className="border-b border-gray-200 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <Link href="/" className="font-bold text-lg flex items-center gap-1.5">
-            블로그황금키 <Key className="w-4 h-4 text-yellow-400" />
+            키라이즈 <TrendingUp className="w-4 h-4 text-blue-500" />
           </Link>
           <Link href="/" className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1">
             <ChevronLeft className="w-4 h-4" /> 홈으로
@@ -25,7 +25,7 @@ export default function PrivacyPage() {
 
         <div className="space-y-10 text-[15px] text-gray-700 leading-relaxed">
           <p>
-            소이크리에이티브(이하 &quot;회사&quot;)는 &quot;블로그황금키&quot; 서비스(이하 &quot;서비스&quot;) 이용자의 개인정보를 중요시하며,
+            소이크리에이티브(이하 &quot;회사&quot;)는 &quot;키라이즈&quot; 서비스(이하 &quot;서비스&quot;) 이용자의 개인정보를 중요시하며,
             「개인정보 보호법」 등 관련 법령을 준수하기 위하여 노력하고 있습니다.
             회사는 본 개인정보처리방침을 통해 회사가 이용자로부터 수집하는 개인정보의 항목, 수집·이용 목적, 보유 기간 등을 안내합니다.
           </p>

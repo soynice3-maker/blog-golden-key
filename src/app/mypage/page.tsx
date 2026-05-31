@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { TrendingUp } from 'lucide-react'
 
 function formatPhone(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 11)
@@ -154,7 +155,7 @@ setUserEmail(user.email ?? '')
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-        <Link href="/dashboard" className="font-bold text-lg">블로그황금키 🔑</Link>
+        <Link href="/dashboard" className="font-bold text-lg flex items-center gap-1.5">키라이즈 <TrendingUp className="w-4 h-4 text-blue-500" /></Link>
         <div className="flex items-center gap-4 text-sm">
           <span className="text-gray-500">{userEmail}</span>
           <button

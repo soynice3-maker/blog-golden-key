@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import { Key, ChevronLeft } from 'lucide-react'
+import { TrendingUp, ChevronLeft } from 'lucide-react'
 
 export const metadata = {
-  title: '이용약관 | 블로그황금키',
+  title: '이용약관 | 키라이즈',
 }
 
 export default function TermsPage() {
@@ -11,7 +11,7 @@ export default function TermsPage() {
       <header className="border-b border-gray-200 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <Link href="/" className="font-bold text-lg flex items-center gap-1.5">
-            블로그황금키 <Key className="w-4 h-4 text-yellow-400" />
+            키라이즈 <TrendingUp className="w-4 h-4 text-blue-500" />
           </Link>
           <Link href="/" className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1">
             <ChevronLeft className="w-4 h-4" /> 홈으로
@@ -27,7 +27,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-bold text-gray-900 mb-3">제1조 (목적)</h2>
             <p>
-              본 약관은 소이크리에이티브(이하 &quot;회사&quot;)가 제공하는 &quot;블로그황금키&quot; 서비스(이하 &quot;서비스&quot;)의 이용과 관련하여
+              본 약관은 소이크리에이티브(이하 &quot;회사&quot;)가 제공하는 &quot;키라이즈&quot; 서비스(이하 &quot;서비스&quot;)의 이용과 관련하여
               회사와 이용자 간의 권리, 의무 및 책임사항, 기타 필요한 사항을 규정함을 목적으로 합니다.
             </p>
           </section>
